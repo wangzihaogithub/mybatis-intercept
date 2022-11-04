@@ -6,11 +6,55 @@ import org.junit.Assert;
 public class ASTDruidConditionUtilTest {
 
     public static void main(String[] args) {
+        mysql8Cte();
         select();
         update();
         delete();
         insert();
         System.out.println();
+    }
+
+    private static void mysql8Cte() {
+        String cte1 = ASTDruidUtil.addAndCondition("with user_cte(dept_id,name) as (select dept_id,name from user ) SELECT t1.id, t2.* " +
+                "from dept t1 left join user_cte t2 on t1.id = t2.dept_id", "tenant_id = 2", "mysql");
+        Assert.assertEquals("WITH user_cte (dept_id, name) AS (\n" +
+                "\t\tSELECT dept_id, name\n" +
+                "\t\tFROM user\n" +
+                "\t\tWHERE user.tenant_id = 2\n" +
+                "\t)\n" +
+                "SELECT t1.id, t2.*\n" +
+                "FROM dept t1\n" +
+                "\tLEFT JOIN user_cte t2\n" +
+                "\tON t1.id = t2.dept_id\n" +
+                "\t\tAND t2.tenant_id = 2\n" +
+                "WHERE t1.tenant_id = 2", cte1);
+
+        String cte2 = ASTDruidUtil.addAndCondition(
+                "WITH user_cte (dept_id, name) AS (SELECT dept_id, name FROM user)," +
+                        " user_cte2 (dept_id, name) AS (SELECT dept_id, name FROM user) " +
+                        "SELECT t1.id, t2.* " +
+                        "FROM dept t1 " +
+                        "LEFT JOIN user_cte t2 ON t1.id = t2.dept_id " +
+                        "LEFT JOIN user_cte2 t3 ON t1.id = t3.dept_id", "tenant_id = 2", "mysql");
+        Assert.assertEquals("WITH user_cte (dept_id, name) AS (\n" +
+                "\t\tSELECT dept_id, name\n" +
+                "\t\tFROM user\n" +
+                "\t\tWHERE user.tenant_id = 2\n" +
+                "\t), \n" +
+                "\tuser_cte2 (dept_id, name) AS (\n" +
+                "\t\tSELECT dept_id, name\n" +
+                "\t\tFROM user\n" +
+                "\t\tWHERE user.tenant_id = 2\n" +
+                "\t)\n" +
+                "SELECT t1.id, t2.*\n" +
+                "FROM dept t1\n" +
+                "\tLEFT JOIN user_cte t2\n" +
+                "\tON t1.id = t2.dept_id\n" +
+                "\t\tAND t2.tenant_id = 2\n" +
+                "\tLEFT JOIN user_cte2 t3\n" +
+                "\tON t1.id = t3.dept_id\n" +
+                "\t\tAND t3.tenant_id = 2\n" +
+                "WHERE t1.tenant_id = 2", cte2);
     }
 
     private static void select() {
