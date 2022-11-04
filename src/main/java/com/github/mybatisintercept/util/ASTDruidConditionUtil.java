@@ -161,10 +161,10 @@ public class ASTDruidConditionUtil {
                         temp.add(((SQLJoinTableSource) tableSource).getLeft());
                         temp.add(((SQLJoinTableSource) tableSource).getRight());
                     } else {
-                        String alias = getAlias(tableSource);
                         if (skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
                             continue;
                         }
+                        String alias = getAlias(tableSource);
                         statement.setWhere(buildCondition(op, injectCondition, alias, left, statement.getWhere()));
                         change[0] = true;
                     }

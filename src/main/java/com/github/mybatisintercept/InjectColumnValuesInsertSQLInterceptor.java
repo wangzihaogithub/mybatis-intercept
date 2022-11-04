@@ -59,24 +59,26 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             String columnName = columnMapping.getColumnName();
             Object columnValue = valueProvider.invokeWithOnBindContext(columnMapping.getAttrName(), interceptContext);
 
-            // 找sql里的预编译问号
-            int columnParameterIndex = ASTDruidUtil.getColumnParameterIndex(newSql, columnName, dbType);
-            if (columnParameterIndex == -1) {
-                // 1. 用户没有填写column字段。 insert into x_table (`id`, `name`, `这里没有填写column字段`)
-                newSql = ASTDruidUtil.addColumnValues(rawSql, columnName, columnValue, dbType);
+            // 找sql里的参数化预编译问号下标
+            int columnParameterizedIndex = ASTDruidUtil.getColumnParameterizedIndex(newSql, columnName, dbType);
+            if (columnParameterizedIndex == -1) {
+                // 1. 用户没有填写column字段。给他加column。 对应： insert into x_table (`a`, `缺失`) values (?)
+                newSql = ASTDruidUtil.addColumnValues(newSql, columnName, columnValue, dbType);
+            } else if (columnParameterizedIndex == -2) {
+                // 2. 用户主动填写了column字段, values是有值的常量. 不管他。对应：insert into x_table (`a`, `b`) values (?, 1)
             } else {
-                // 2. 用户主动填写了column字段。 insert into x_table (`id`, `name`, `这里主动填写column字段`)
+                // 3. 用户主动填写了column字段, values是参数化. 就给对象赋值，对应：insert into x_table (`a`, `b`) values (?, ?)
                 BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
                 List<ParameterMapping> parameterMappingList = boundSql.getParameterMappings();
-                ParameterMapping parameterMapping = parameterMappingList.get(columnParameterIndex);
+                ParameterMapping parameterMapping = parameterMappingList.get(columnParameterizedIndex);
                 Object parameterObject = boundSql.getParameterObject();
 
                 // 向实体类里自动回填属性值
                 boolean setterSuccess = invokeParameterObjectSetter(parameterObject, parameterMapping, columnValue);
                 if (!setterSuccess) {
                     // 用户实体类里没有这个属性，删掉拼接的?参数, 改sql，将字段写为常量至values里
-                    parameterMappingList.remove(columnParameterIndex);
-                    newSql = ASTDruidUtil.addColumnValues(rawSql, columnName, columnValue, dbType);
+                    parameterMappingList.remove(columnParameterizedIndex);
+                    newSql = ASTDruidUtil.addColumnValues(newSql, columnName, columnValue, dbType);
                 }
             }
         }

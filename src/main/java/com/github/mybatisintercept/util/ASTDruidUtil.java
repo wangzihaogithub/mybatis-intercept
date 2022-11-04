@@ -3,10 +3,7 @@ package com.github.mybatisintercept.util;
 import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLStatement;
-import com.alibaba.druid.sql.ast.expr.SQLBinaryOperator;
-import com.alibaba.druid.sql.ast.expr.SQLCharExpr;
-import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
-import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
+import com.alibaba.druid.sql.ast.expr.*;
 import com.alibaba.druid.sql.ast.statement.*;
 import com.alibaba.druid.sql.dialect.mysql.ast.statement.MySqlShowStatement;
 import com.alibaba.druid.sql.visitor.SQLASTVisitorAdapter;
@@ -160,12 +157,7 @@ public class ASTDruidUtil {
     }
 
 
-    public static int getColumnParameterIndex(String rawSql, String columnName, String dbType) {
-        List<SQLExpr> columns = getColumns(rawSql, dbType);
-        return columnIndex(columns, columnName);
-    }
-
-    public static List<SQLExpr> getColumns(String rawSql, String dbType) {
+    public static int getColumnParameterizedIndex(String rawSql, String columnName, String dbType) {
         List<SQLStatement> sqlStatements = SQLUtils.parseStatements(rawSql, dbType);
         // SingleStatement
         if (sqlStatements.size() != 1) {
@@ -174,12 +166,39 @@ public class ASTDruidUtil {
         SQLStatement sqlStatement = sqlStatements.get(0);
         if (sqlStatement instanceof SQLInsertStatement) {
             SQLInsertStatement statement = ((SQLInsertStatement) sqlStatement);
-            return statement.getColumns();
+            return columnParameterizedIndex(statement.getColumns(), statement.getValuesList(), columnName);
         } else if (sqlStatement instanceof SQLReplaceStatement) {
-            return ((SQLReplaceStatement) sqlStatement).getColumns();
+            SQLReplaceStatement statement = ((SQLReplaceStatement) sqlStatement);
+            return columnParameterizedIndex(statement.getColumns(), statement.getValuesList(), columnName);
         } else {
             throw new IllegalStateException("getColumns not support. sql = " + rawSql);
         }
+    }
+
+    private static SQLExpr valueAt(List<SQLExpr> values, int index) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        } else {
+            return values.get(index);
+        }
+    }
+
+    private static int columnParameterizedIndex(List<SQLExpr> columns, List<SQLInsertStatement.ValuesClause> valuesList, String columnName) {
+        int i = 0;
+        List<SQLExpr> values = valuesList == null || valuesList.isEmpty() ? null : valuesList.get(0).getValues();
+        for (SQLExpr column : columns) {
+            String name = SQLUtils.normalize(column.toString(), null);
+            SQLExpr value = valueAt(values, i);
+            if (columnName.equalsIgnoreCase(name)) {
+                if (value instanceof SQLVariantRefExpr) {
+                    return ((SQLVariantRefExpr) value).getIndex();
+                } else {
+                    return -2;
+                }
+            }
+            i++;
+        }
+        return -1;
     }
 
     private static int columnIndex(List<SQLExpr> columns, String columnName) {
