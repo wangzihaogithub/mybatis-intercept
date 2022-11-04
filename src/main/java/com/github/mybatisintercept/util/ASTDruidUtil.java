@@ -34,16 +34,17 @@ public class ASTDruidUtil {
         }
     }
 
-    private static void addSelectItem(SQLSelect query, SQLExpr valueExpr, String rawSql, String columnName) {
+    private static boolean addSelectItem(SQLSelect query, SQLExpr valueExpr) {
         if (query == null) {
-            return;
+            return true;
         }
         SQLSelectQuery select = query.getQuery();
         if (select instanceof SQLSelectQueryBlock) {
             SQLSelectQueryBlock queryBlock = ((SQLSelectQueryBlock) select);
             queryBlock.addSelectItem(valueExpr);
+            return true;
         } else {
-            throw new IllegalStateException("not support addColumnValues. sql = " + rawSql + ", columnName = " + columnName);
+            return false;
         }
     }
 
@@ -65,7 +66,9 @@ public class ASTDruidUtil {
                 statement.getColumns().add(columnExpr);
                 if (query != null) {
                     // insert into `base_area` (`id`, `name`) select id,name from copy
-                    addSelectItem(query, valueExpr, rawSql, columnName);
+                    if (!addSelectItem(query, valueExpr)) {
+                        throw new IllegalStateException("not support addColumnValues. sql = " + rawSql + ", columnName = " + columnName);
+                    }
                 } else {
                     // insert into `base_area` (`id`, `name`) values (1, '2')
                     for (SQLInsertStatement.ValuesClause valuesClause : statement.getValuesList()) {
@@ -93,7 +96,9 @@ public class ASTDruidUtil {
                 statement.getColumns().add(columnExpr);
                 if (query != null) {
                     // replace into `base_area` (`id`, `name`) select id,name from copy
-                    addSelectItem(query.getSubQuery(), valueExpr, rawSql, columnName);
+                    if (!addSelectItem(query.getSubQuery(), valueExpr)) {
+                        throw new IllegalStateException("not support addColumnValues. sql = " + rawSql + ", columnName = " + columnName);
+                    }
                 } else {
                     // replace into `base_area` (`id`, `name`) values (1, '2')
                     for (SQLInsertStatement.ValuesClause valuesClause : statement.getValuesList()) {
