@@ -159,6 +159,29 @@ public class ASTDruidUtil {
         return isSupportWhere(sqlStatements.get(0));
     }
 
+
+    public static int getColumnParameterIndex(String rawSql, String columnName, String dbType) {
+        List<SQLExpr> columns = getColumns(rawSql, dbType);
+        return columnIndex(columns, columnName);
+    }
+
+    public static List<SQLExpr> getColumns(String rawSql, String dbType) {
+        List<SQLStatement> sqlStatements = SQLUtils.parseStatements(rawSql, dbType);
+        // SingleStatement
+        if (sqlStatements.size() != 1) {
+            throw new IllegalStateException("getColumns sqlStatements.size() != 1. sql = " + rawSql);
+        }
+        SQLStatement sqlStatement = sqlStatements.get(0);
+        if (sqlStatement instanceof SQLInsertStatement) {
+            SQLInsertStatement statement = ((SQLInsertStatement) sqlStatement);
+            return statement.getColumns();
+        } else if (sqlStatement instanceof SQLReplaceStatement) {
+            return ((SQLReplaceStatement) sqlStatement).getColumns();
+        } else {
+            throw new IllegalStateException("getColumns not support. sql = " + rawSql);
+        }
+    }
+
     private static int columnIndex(List<SQLExpr> columns, String columnName) {
         int i = 0;
         for (SQLExpr column : columns) {

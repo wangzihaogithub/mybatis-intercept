@@ -1,10 +1,13 @@
 package com.github.mybatisintercept;
 
 import com.github.mybatisintercept.util.ASTDruidUtil;
+import com.github.mybatisintercept.util.BeanMap;
 import com.github.mybatisintercept.util.MybatisUtil;
 import com.github.mybatisintercept.util.StaticMethodAccessor;
 import org.apache.ibatis.executor.Executor;
+import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.plugin.*;
 
 import java.lang.reflect.Method;
@@ -53,10 +56,54 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
     protected String addColumnValues(InterceptContext interceptContext, String rawSql) {
         String newSql = rawSql;
         for (ColumnMapping columnMapping : columnMappings) {
+            String columnName = columnMapping.getColumnName();
             Object columnValue = valueProvider.invokeWithOnBindContext(columnMapping.getAttrName(), interceptContext);
-            newSql = ASTDruidUtil.addColumnValues(rawSql, columnMapping.getColumnName(), columnValue, dbType);
+
+            // 找sql里的预编译问号
+            int columnParameterIndex = ASTDruidUtil.getColumnParameterIndex(newSql, columnName, dbType);
+            if (columnParameterIndex == -1) {
+                // 1. 用户没有填写column字段。 insert into x_table (`id`, `name`, `这里没有填写column字段`)
+                newSql = ASTDruidUtil.addColumnValues(rawSql, columnName, columnValue, dbType);
+            } else {
+                // 2. 用户主动填写了column字段。 insert into x_table (`id`, `name`, `这里主动填写column字段`)
+                BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
+                List<ParameterMapping> parameterMappingList = boundSql.getParameterMappings();
+                ParameterMapping parameterMapping = parameterMappingList.get(columnParameterIndex);
+                Object parameterObject = boundSql.getParameterObject();
+
+                // 向实体类里自动回填属性值
+                boolean setterSuccess = invokeParameterObjectSetter(parameterObject, parameterMapping, columnValue);
+                if (!setterSuccess) {
+                    // 用户实体类里没有这个属性，删掉拼接的?参数, 改sql，将字段写为常量至values里
+                    parameterMappingList.remove(columnParameterIndex);
+                    newSql = ASTDruidUtil.addColumnValues(rawSql, columnName, columnValue, dbType);
+                }
+            }
         }
         return newSql;
+    }
+
+    protected boolean invokeParameterObjectSetter(Object parameterObject, ParameterMapping parameterMapping, Object value) {
+        String property = parameterMapping.getProperty();
+        Map beanHandler;
+        if (parameterObject instanceof Map) {
+            beanHandler = (Map) parameterObject;
+        } else {
+            beanHandler = new BeanMap(parameterObject);
+            // 用户实体类里没有这个属性
+            if (!beanHandler.containsKey(property)) {
+                return false;
+            }
+        }
+
+        Object existValue = beanHandler.get(property);
+        if (existValue != null && !"".equals(existValue)) {
+            // 用户自己赋值了, 不更改用户填的值
+        } else {
+            // 用户没有赋值，自动回填至实体类
+            beanHandler.put(property, value);
+        }
+        return true;
     }
 
     protected boolean isSupportIntercept(InterceptContext interceptContext) {

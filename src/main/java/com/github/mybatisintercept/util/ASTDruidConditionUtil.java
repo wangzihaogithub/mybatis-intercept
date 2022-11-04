@@ -31,7 +31,7 @@ public class ASTDruidConditionUtil {
         }
     }
 
-    public static BiPredicate<String, String> wrapDialectSkip(String dbType, BiPredicate<String, String> skip) {
+    private static BiPredicate<String, String> wrapDialectSkip(String dbType, BiPredicate<String, String> skip) {
         switch (dbType) {
             case "MARIADB":
             case "mariadb":

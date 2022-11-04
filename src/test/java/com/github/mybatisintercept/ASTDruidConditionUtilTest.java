@@ -1,22 +1,16 @@
 package com.github.mybatisintercept;
 
-
 import com.github.mybatisintercept.util.ASTDruidUtil;
 import org.junit.Assert;
 
 public class ASTDruidConditionUtilTest {
 
     public static void main(String[] args) {
-        test();
         select();
         update();
         delete();
         insert();
         System.out.println();
-    }
-
-    private static void test() {
-        System.out.println("test");
     }
 
     private static void select() {
@@ -388,6 +382,197 @@ public class ASTDruidConditionUtilTest {
                 "\t\t\t\tAND p1.tenant_id = 2\n" +
                 "\t\t))\n" +
                 "\tAND user.tenant_id = 2", select16);
+
+        // case WHEN END
+        String casewhen = ASTDruidUtil.addAndCondition("SELECT\n" +
+                "\tt10.interview_operate_uid AS interviewOperateUid,\n" +
+                "\tt10.over_status AS overStatus,\n" +
+                "\tt11.enter_offer_time AS enterOfferTime,\n" +
+                "\tt10.enterprise_pass_time AS enterprisePassTime,\n" +
+                "\tt10.add_time AS addtime,\n" +
+                "\tt10.guarantee_time AS guaranteeTime,\n" +
+                "\tt10.upload_time AS uploadTime,\n" +
+                "\tt10.query_status AS queryStatus,\n" +
+                "\tt10.sub_query_status AS subQueryStatus,\n" +
+                "\tt.sign_time AS signTime,\n" +
+                "\tt10.estimate_time AS estimateTime,\n" +
+                "\tt10.last_interview_id AS lastInterviewId,\n" +
+                "\tt10.last_offer_id AS offerId,\n" +
+                "\tt10.last_entry_id AS entryId,\n" +
+                "\tt10.probation_time AS probationTime,\n" +
+                "\tt10.entry_time AS entryTime,\n" +
+                "\tt10.entry_operate_time AS entryOperateTime,\n" +
+                "\tt10.invoice_status AS invoiceStatus,\n" +
+                "\tt.last_remark AS remarks,\n" +
+                "\tt10.invoice_time AS invoiceTime,\n" +
+                "\tdate_format( t10.invoice_time, '%Y-%m-%d' ) AS invoiceTimeStr,\n" +
+                "\tifnull( t10.no_invoice_event, 10 ) AS noInvoiceEvent,\n" +
+                "\tt.id AS pipelineid,\n" +
+                "\tt.offer_rank AS offerRank,\n" +
+                "\tt3.brand,\n" +
+                "\tt3.NAME AS companyName,\n" +
+                "\tt4.NAME AS baseNodeName,\n" +
+                "\tt1.NAME AS positionName,\n" +
+                "\tt1.city_id AS cityId,\n" +
+                "\tt8.`talent_name` AS talentName,\n" +
+                "\tt8.`id` AS talentId,\n" +
+                "\tt8.`now_base_company_id` AS nowBaseCompanyId,\n" +
+                "\tt8.`now_base_company_name` AS nowBaseCompanyName,\n" +
+                "\tt8.now_func_type_name AS nowBasePositionName,\n" +
+                "\tt8.base_func_type_ids AS baseFuncTypeIds,\n" +
+                "\tt8.mobile AS phone,\n" +
+                "\tt.`last_rec_time` AS recTime,\n" +
+                "\tt.pipeline_state AS pipelineState,\n" +
+                "\tt.current_stage AS currentStage,\n" +
+                "\tt.confirm_type AS confirmType,\n" +
+                "\tt.feed_back_type AS feedBackType,\n" +
+                "\tt.create_uid AS createUid,\n" +
+                "\tt1.STATUS,\n" +
+                "CASE\n" +
+                "\t\t\n" +
+                "\t\tWHEN t.pipeline_state = 110 THEN\n" +
+                "\t\t'成功' \n" +
+                "\t\tWHEN t.pipeline_state = 120 THEN\n" +
+                "\t\t'失败' ELSE '流程中' \n" +
+                "\tEND AS talentStatus,\n" +
+                "CASE\n" +
+                "\t\t\n" +
+                "\t\tWHEN t.state_and_operate != 120 \n" +
+                "\t\tAND t.state_and_operate != 100 THEN\n" +
+                "\t\t\tt.state_and_operate ELSE\n" +
+                "\t\tCASE\n" +
+                "\t\t\t\t\n" +
+                "\t\t\t\tWHEN t.last_interview_time < now() THEN\n" +
+                "\t\t\t\t120 ELSE 100 \n" +
+                "\t\t\tEND \n" +
+                "\t\t\tEND AS stateAndOperate,\n" +
+                "\t\t\tt.`last_update_time` AS lastUpdateTime,\n" +
+                "\t\t\tt.pm_uid AS pmUid,\n" +
+                "\t\t\tt.`consultant_id` AS recUid,\n" +
+                "\t\t\tt.`last_interview_time` AS lastInterviewTime,\n" +
+                "\t\t\tt1.contact_name AS contactName,\n" +
+                "\t\t\tt.last_operate_state AS eventCode,\n" +
+                "\t\t\tt.biz_corp_id AS companyId,\n" +
+                "\t\t\tt.biz_position_id AS positionId,\n" +
+                "\t\t\tt.interview_flag AS interviewFlag,\n" +
+                "\t\t\tt.step AS step \n" +
+                "\t\tFROM\n" +
+                "\t\t\tpipeline t\n" +
+                "\t\t\tINNER JOIN pipeline_ext t10 ON t10.pipeline_id = t.id \n" +
+                "\t\t\tAND t10.tenant_id = 1\n" +
+                "\t\t\tLEFT JOIN biz_position t1 ON t.biz_position_id = t1.id \n" +
+                "\t\t\tAND t1.tenant_id = 1\n" +
+                "\t\t\tLEFT JOIN ( SELECT min( create_time ) AS enter_offer_time, pipeline_id FROM pipeline_offer offer WHERE offer.delete_flag = 0 AND offer.tenant_id = 1 GROUP BY pipeline_id ) t11 ON t11.pipeline_id = t.id\n" +
+                "\t\t\tLEFT JOIN biz_corp t3 ON t3.id = t.biz_corp_id \n" +
+                "\t\t\tAND t3.tenant_id = 1\n" +
+                "\t\t\tLEFT JOIN base_node t4 ON t4.id = t1.base_node_id \n" +
+                "\t\t\tAND t4.tenant_id = 1\n" +
+                "\t\t\tLEFT JOIN talent t8 ON t8.id = t.talent_id \n" +
+                "\t\t\tAND t8.tenant_id = 1 \n" +
+                "\t\tWHERE\n" +
+                "\t\t\tt.delete_flag = 0 \n" +
+                "\t\t\tAND (\n" +
+                "\t\t\t\tt10.over_status = ? \n" +
+                "\t\t\tOR t.state_and_operate IN ( 10, 40 )) \n" +
+                "\t\tAND\n" +
+                "\t\tCASE\n" +
+                "\t\t\t\t\n" +
+                "\t\t\t\tWHEN t.state_and_operate != 120 \n" +
+                "\t\t\t\tAND t.state_and_operate != 100 THEN\n" +
+                "\t\t\t\t\tt.state_and_operate ELSE\n" +
+                "\t\t\t\tCASE\n" +
+                "\t\t\t\t\t\t\n" +
+                "\t\t\t\t\t\tWHEN t.last_interview_time < now() THEN\n" +
+                "\t\t\t\t\t\t120 ELSE 100 \n" +
+                "\t\t\t\t\tEND \n" +
+                "\t\t\t\t\t\tEND IN (?,\n" +
+                "\t\t\t\t\t\t?,\n" +
+                "\t\t\t\t\t\t?,\n" +
+                "\t\t\t\t\t?) \n" +
+                "\t\t\t\t\tAND t.consultant_id IN (?) \n" +
+                "\t\t\t\t\tAND 1 = 1 \n" +
+                "\t\t\t\t\tAND ( t.last_rec_time BETWEEN ? AND ? OR t.state_and_operate = 10 ) \n" +
+                "\t\t\t\t\tAND t.tenant_id = 1 \n" +
+                "\t\t\t\tORDER BY\n" +
+                "\t\t\t\tt.`last_update_time` DESC \n" +
+                "\tLIMIT ?", "tenant_id = 2", "mysql");
+
+        Assert.assertEquals("SELECT t10.interview_operate_uid AS interviewOperateUid, t10.over_status AS overStatus, t11.enter_offer_time AS enterOfferTime, t10.enterprise_pass_time AS enterprisePassTime, t10.add_time AS addtime\n" +
+                "\t, t10.guarantee_time AS guaranteeTime, t10.upload_time AS uploadTime, t10.query_status AS queryStatus, t10.sub_query_status AS subQueryStatus, t.sign_time AS signTime\n" +
+                "\t, t10.estimate_time AS estimateTime, t10.last_interview_id AS lastInterviewId, t10.last_offer_id AS offerId, t10.last_entry_id AS entryId, t10.probation_time AS probationTime\n" +
+                "\t, t10.entry_time AS entryTime, t10.entry_operate_time AS entryOperateTime, t10.invoice_status AS invoiceStatus, t.last_remark AS remarks, t10.invoice_time AS invoiceTime\n" +
+                "\t, date_format(t10.invoice_time, '%Y-%m-%d') AS invoiceTimeStr\n" +
+                "\t, ifnull(t10.no_invoice_event, 10) AS noInvoiceEvent, t.id AS pipelineid\n" +
+                "\t, t.offer_rank AS offerRank, t3.brand, t3.NAME AS companyName, t4.NAME AS baseNodeName, t1.NAME AS positionName\n" +
+                "\t, t1.city_id AS cityId, t8.`talent_name` AS talentName, t8.`id` AS talentId, t8.`now_base_company_id` AS nowBaseCompanyId, t8.`now_base_company_name` AS nowBaseCompanyName\n" +
+                "\t, t8.now_func_type_name AS nowBasePositionName, t8.base_func_type_ids AS baseFuncTypeIds, t8.mobile AS phone, t.`last_rec_time` AS recTime, t.pipeline_state AS pipelineState\n" +
+                "\t, t.current_stage AS currentStage, t.confirm_type AS confirmType, t.feed_back_type AS feedBackType, t.create_uid AS createUid, t1.STATUS\n" +
+                "\t, CASE \n" +
+                "\t\tWHEN t.pipeline_state = 110 THEN '成功'\n" +
+                "\t\tWHEN t.pipeline_state = 120 THEN '失败'\n" +
+                "\t\tELSE '流程中'\n" +
+                "\tEND AS talentStatus\n" +
+                "\t, CASE \n" +
+                "\t\tWHEN t.state_and_operate != 120\n" +
+                "\t\tAND t.state_and_operate != 100 THEN t.state_and_operate\n" +
+                "\t\tELSE \n" +
+                "\t\t\tCASE \n" +
+                "\t\t\t\tWHEN t.last_interview_time < now() THEN 120\n" +
+                "\t\t\t\tELSE 100\n" +
+                "\t\t\tEND\n" +
+                "\tEND AS stateAndOperate, t.`last_update_time` AS lastUpdateTime, t.pm_uid AS pmUid, t.`consultant_id` AS recUid, t.`last_interview_time` AS lastInterviewTime\n" +
+                "\t, t1.contact_name AS contactName, t.last_operate_state AS eventCode, t.biz_corp_id AS companyId, t.biz_position_id AS positionId, t.interview_flag AS interviewFlag\n" +
+                "\t, t.step AS step\n" +
+                "FROM pipeline t\n" +
+                "\tINNER JOIN pipeline_ext t10\n" +
+                "\tON t10.pipeline_id = t.id\n" +
+                "\t\tAND t10.tenant_id = 1\n" +
+                "\t\tAND t10.tenant_id = 2\n" +
+                "\tLEFT JOIN biz_position t1\n" +
+                "\tON t.biz_position_id = t1.id\n" +
+                "\t\tAND t1.tenant_id = 1\n" +
+                "\t\tAND t1.tenant_id = 2\n" +
+                "\tLEFT JOIN (\n" +
+                "\t\tSELECT min(create_time) AS enter_offer_time, pipeline_id\n" +
+                "\t\tFROM pipeline_offer offer\n" +
+                "\t\tWHERE offer.delete_flag = 0\n" +
+                "\t\t\tAND offer.tenant_id = 1\n" +
+                "\t\t\tAND offer.tenant_id = 2\n" +
+                "\t\tGROUP BY pipeline_id\n" +
+                "\t) t11\n" +
+                "\tON t11.pipeline_id = t.id\n" +
+                "\tLEFT JOIN biz_corp t3\n" +
+                "\tON t3.id = t.biz_corp_id\n" +
+                "\t\tAND t3.tenant_id = 1\n" +
+                "\t\tAND t3.tenant_id = 2\n" +
+                "\tLEFT JOIN base_node t4\n" +
+                "\tON t4.id = t1.base_node_id\n" +
+                "\t\tAND t4.tenant_id = 1\n" +
+                "\t\tAND t4.tenant_id = 2\n" +
+                "\tLEFT JOIN talent t8\n" +
+                "\tON t8.id = t.talent_id\n" +
+                "\t\tAND t8.tenant_id = 1\n" +
+                "\t\tAND t8.tenant_id = 2\n" +
+                "WHERE t.delete_flag = 0\n" +
+                "\tAND (t10.over_status = ?\n" +
+                "\t\tOR t.state_and_operate IN (10, 40))\n" +
+                "\tAND CASE \n" +
+                "\t\tWHEN t.state_and_operate != 120\n" +
+                "\t\tAND t.state_and_operate != 100 THEN t.state_and_operate\n" +
+                "\t\tELSE \n" +
+                "\t\t\tCASE \n" +
+                "\t\t\t\tWHEN t.last_interview_time < now() THEN 120\n" +
+                "\t\t\t\tELSE 100\n" +
+                "\t\t\tEND\n" +
+                "\tEND IN (?, ?, ?, ?)\n" +
+                "\tAND t.consultant_id IN (?)\n" +
+                "\tAND 1 = 1\n" +
+                "\tAND (t.last_rec_time BETWEEN ? AND ?\n" +
+                "\t\tOR t.state_and_operate = 10)\n" +
+                "\tAND t.tenant_id = 1\n" +
+                "\tAND t.tenant_id = 2\n" +
+                "ORDER BY t.`last_update_time` DESC\n" +
+                "LIMIT ?", casewhen);
 
         // @
         String select17 = ASTDruidUtil.addAndCondition("SELECT\n" +
