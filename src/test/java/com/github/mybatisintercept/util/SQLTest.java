@@ -1,15 +1,18 @@
 package com.github.mybatisintercept.util;
 
 import org.junit.Assert;
+import org.junit.Test;
 
 import java.util.Collections;
 
 public class SQLTest {
     public static void main(String[] args) {
-        compile();
+        SQLTest test = new SQLTest();
+        test.compile();
     }
 
-    private static void compile() {
+    @Test
+    public void compile() {
         SQL compile1 = SQL.compile("tenant_id = '${tenantId}'", Collections.singletonMap("tenantId", "1"));
         Assert.assertEquals("tenant_id = '1'", compile1.getExprSql());
 

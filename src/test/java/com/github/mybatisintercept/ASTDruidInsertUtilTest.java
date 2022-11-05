@@ -2,14 +2,18 @@ package com.github.mybatisintercept;
 
 import com.github.mybatisintercept.util.ASTDruidUtil;
 import org.junit.Assert;
+import org.junit.Test;
 
 public class ASTDruidInsertUtilTest {
 
     public static void main(String[] args) {
-        insert();
+        ASTDruidInsertUtilTest test = new ASTDruidInsertUtilTest();
+
+        test.insert();
     }
 
-    private static void insert() {
+    @Test
+    public void insert() {
         String insert1 = ASTDruidUtil.addColumnValues("insert into `base_area` (`id`, `name`) select id,name from copy ", "tenant_id", 2, "mysql");
         Assert.assertEquals("INSERT INTO `base_area` (`id`, `name`, tenant_id)\n" +
                 "SELECT id, name, 2\n" +

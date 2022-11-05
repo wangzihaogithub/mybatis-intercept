@@ -14,16 +14,17 @@ import java.util.function.BiPredicate;
 public class ASTDruidUtil {
 
     public static String addAndCondition(String sql, String injectCondition, String dbType) {
-        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, true, dbType, null);
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
+                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL, dbType, null);
     }
 
-    public static String addAndCondition(String sql, String injectCondition, boolean ifExistInjectConditionThenSkip, String dbType, BiPredicate<String, String> skip) {
-        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, ifExistInjectConditionThenSkip, dbType, skip);
+    public static String addAndCondition(String sql, String injectCondition, ASTDruidConditionUtil.ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum, String dbType, BiPredicate<String, String> skip) {
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, existInjectConditionStrategyEnum, dbType, skip);
     }
 
     public static SQLExpr toValueExpr(Object value) {
         if (value == null) {
-            return SQLUtils.toMySqlExpr("null");
+            return new SQLNullExpr();
         } else if (value instanceof String) {
             return new SQLCharExpr((String) value);
         } else {

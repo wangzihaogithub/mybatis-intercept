@@ -1,13 +1,16 @@
 package com.github.mybatisintercept.util;
 
 import org.junit.Assert;
+import org.junit.Test;
 
 public class ASTDruidUtilTest {
     public static void main(String[] args) {
-        columnParameterizedIndex();
+        ASTDruidUtilTest test = new ASTDruidUtilTest();
+        test.columnParameterizedIndex();
     }
 
-    public static void columnParameterizedIndex() {
+    @Test
+    public void columnParameterizedIndex() {
         int case1 = ASTDruidUtil.getColumnParameterizedIndex(
                 "insert into x (a,b,c) values (1,?,?)", "b", "mysql");
         Assert.assertEquals(0, case1);

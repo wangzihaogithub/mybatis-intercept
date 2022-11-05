@@ -1,25 +1,29 @@
 package com.github.mybatisintercept.util;
 
 import org.junit.Assert;
+import org.junit.Test;
 
 public class StaticMethodAccessorTest {
-    public static final StaticMethodAccessor<Void> getValueMethodAccessor = new StaticMethodAccessor<>(
+    private final StaticMethodAccessor<Void> getValueMethodAccessor = new StaticMethodAccessor<>(
             "com.github.mybatisintercept.util.StaticMethodAccessorTest#getValue");
 
-    public static final StaticMethodAccessor<MyContext> getValueWithOnBindContextMethodAccessor = new StaticMethodAccessor<>(
+    private final StaticMethodAccessor<MyContext> getValueWithOnBindContextMethodAccessor = new StaticMethodAccessor<>(
             "com.github.mybatisintercept.util.StaticMethodAccessorTest#getValueWithOnBindContext");
 
     public static void main(String[] args) {
-        invoke();
-        invokeWithOnBindContext();
+        StaticMethodAccessorTest test = new StaticMethodAccessorTest();
+        test.invoke();
+        test.invokeWithOnBindContext();
     }
 
-    public static void invokeWithOnBindContext() {
+    @Test
+    public void invokeWithOnBindContext() {
         MyContext context = new MyContext();
         Object userId = getValueWithOnBindContextMethodAccessor.invokeWithOnBindContext("userId", context);
     }
 
-    public static void invoke() {
+    @Test
+    public void invoke() {
         Object userId1 = getValue("userId");
         Object userId2 = getValueMethodAccessor.apply("userId");
 
