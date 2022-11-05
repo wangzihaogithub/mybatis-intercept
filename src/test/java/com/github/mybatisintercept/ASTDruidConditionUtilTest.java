@@ -1,13 +1,14 @@
 package com.github.mybatisintercept;
 
+import com.github.mybatisintercept.util.ASTDruidConditionUtil;
 import com.github.mybatisintercept.util.ASTDruidUtil;
 import org.junit.Assert;
 
 public class ASTDruidConditionUtilTest {
 
     public static void main(String[] args) {
-        mysql8Cte();
         select();
+        mysql8Cte();
         update();
         delete();
         insert();
@@ -58,6 +59,21 @@ public class ASTDruidConditionUtilTest {
     }
 
     private static void select() {
+        String where = ASTDruidUtil.addAndCondition("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2\n" +
+                "\tON t1.dept_id = t2.id\n" +
+                "\t\tAND t2.tenant_id = 2 and t2.type = 1\n" +
+                "WHERE t1.id = ?  and t1.type = 1\n" +
+                "\tAND t1.tenant_id = 2", "tenant_id = 1", "mysql");
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2\n" +
+                "\tON t1.dept_id = t2.id\n" +
+                "\t\tAND t2.tenant_id = 2\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", where);
+
         String insert3 = ASTDruidUtil.addAndCondition("SELECT * INTO p_user_1 FROM p_user  ", "tenant_id = 2", "mysql");
         Assert.assertEquals("SELECT *\n" +
                 "INTO p_user_1\n" +

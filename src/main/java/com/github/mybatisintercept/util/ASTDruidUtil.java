@@ -14,11 +14,11 @@ import java.util.function.BiPredicate;
 public class ASTDruidUtil {
 
     public static String addAndCondition(String sql, String injectCondition, String dbType) {
-        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, dbType, null);
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, true, dbType, null);
     }
 
-    public static String addAndCondition(String sql, String injectCondition, String dbType, BiPredicate<String, String> skip) {
-        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, dbType, skip);
+    public static String addAndCondition(String sql, String injectCondition, boolean ifExistInjectConditionThenSkip, String dbType, BiPredicate<String, String> skip) {
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, ifExistInjectConditionThenSkip, dbType, skip);
     }
 
     public static SQLExpr toValueExpr(Object value) {

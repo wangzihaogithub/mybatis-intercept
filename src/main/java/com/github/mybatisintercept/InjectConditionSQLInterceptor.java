@@ -35,6 +35,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     private final Set<String> skipTableNames = new LinkedHashSet<>();
     private final AtomicBoolean initFlag = new AtomicBoolean();
     private String dbType;
+    private boolean ifExistInjectConditionThenSkip;
     private SQL conditionExpression;
     private StaticMethodAccessor<InterceptContext> valueProvider;
     private BiPredicate<String, String> skipPredicate = (schema, tableName) -> {
@@ -60,7 +61,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         if (isSupportIntercept(interceptContext)) {
             String rawSql = MybatisUtil.getBoundSqlString(invocation);
             String injectCondition = compileInject(interceptContext);
-            String newSql = ASTDruidUtil.addAndCondition(rawSql, injectCondition, dbType, skipPredicate);
+            String newSql = ASTDruidUtil.addAndCondition(rawSql, injectCondition, ifExistInjectConditionThenSkip, dbType, skipPredicate);
             if (!Objects.equals(rawSql, newSql)) {
                 MybatisUtil.rewriteSql(invocation, newSql);
             }
@@ -129,6 +130,14 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         this.conditionExpression = conditionExpression;
     }
 
+    public boolean isIfExistInjectConditionThenSkip() {
+        return ifExistInjectConditionThenSkip;
+    }
+
+    public void setIfExistInjectConditionThenSkip(boolean ifExistInjectConditionThenSkip) {
+        this.ifExistInjectConditionThenSkip = ifExistInjectConditionThenSkip;
+    }
+
     @Override
     public Object plugin(Object target) {
         return Plugin.wrap(target, this);
@@ -141,6 +150,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
         String valueProvider = properties.getProperty("InjectConditionSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
         String dbType = properties.getProperty("InjectConditionSQLInterceptor.dbType", "mysql");
+        String ifExistInjectConditionThenSkip = properties.getProperty("InjectConditionSQLInterceptor.ifExistInjectConditionThenSkip", "true");
 
         String conditionExpression = properties.getProperty("InjectConditionSQLInterceptor.conditionExpression", "tenant_id = ${tenantId}"); // 字符串请这样写： 字段 = '${属性}'
         String interceptPackageNames = properties.getProperty("InjectConditionSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
@@ -148,6 +158,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
 
         this.valueProvider = new StaticMethodAccessor<>(valueProvider);
         this.dbType = dbType;
+        this.ifExistInjectConditionThenSkip = "true".equalsIgnoreCase(ifExistInjectConditionThenSkip);
         this.conditionExpression = SQL.compile(conditionExpression, Collections.emptyMap());
         if (interceptPackageNames.trim().length() > 0) {
             this.interceptPackageNames.addAll(Arrays.asList(interceptPackageNames.trim().split(",")));

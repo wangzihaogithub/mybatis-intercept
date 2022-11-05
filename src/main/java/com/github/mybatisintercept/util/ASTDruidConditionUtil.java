@@ -3,6 +3,7 @@ package com.github.mybatisintercept.util;
 import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLName;
+import com.alibaba.druid.sql.ast.SQLObject;
 import com.alibaba.druid.sql.ast.SQLStatement;
 import com.alibaba.druid.sql.ast.expr.SQLBinaryOpExpr;
 import com.alibaba.druid.sql.ast.expr.SQLBinaryOperator;
@@ -17,13 +18,15 @@ import java.util.function.BiPredicate;
 
 public class ASTDruidConditionUtil {
 
-    public static String addCondition(String sql, String injectCondition, SQLBinaryOperator op, boolean left, String dbType, BiPredicate<String, String> skip) {
+    public static String addCondition(String sql, String injectCondition, SQLBinaryOperator op,
+                                      boolean appendConditionToLeft, boolean ifExistInjectConditionThenSkip,
+                                      String dbType, BiPredicate<String, String> skip) {
         List<SQLStatement> stmtList = SQLUtils.parseStatements(sql, dbType);
         if (stmtList.size() != 1) {
             throw new IllegalArgumentException("not support statement :" + sql);
         }
         SQLStatement ast = stmtList.get(0);
-        boolean change = addCondition(ast, op, SQLUtils.toMySqlExpr(injectCondition), left, wrapDialectSkip(dbType, skip));
+        boolean change = addCondition(ast, op, SQLUtils.toMySqlExpr(injectCondition), appendConditionToLeft, ifExistInjectConditionThenSkip, wrapDialectSkip(dbType, skip));
         if (change) {
             return SQLUtils.toSQLString(ast, dbType);
         } else {
@@ -102,7 +105,9 @@ public class ASTDruidConditionUtil {
         }
     }
 
-    public static boolean addCondition(SQLStatement ast, SQLBinaryOperator op, SQLExpr injectCondition, boolean left, BiPredicate<String, String> skip) {
+    public static boolean addCondition(SQLStatement ast, SQLBinaryOperator op, SQLExpr injectCondition,
+                                       boolean appendConditionToLeft, boolean ifExistInjectConditionThenSkip,
+                                       BiPredicate<String, String> skip) {
         if (ast instanceof MySqlShowStatement || ast instanceof SQLSetStatement) {
             return false;
         }
@@ -120,7 +125,10 @@ public class ASTDruidConditionUtil {
                     return true;
                 }
                 String alias = getAlias(from);
-                statement.setWhere(buildCondition(op, injectCondition, alias, left, statement.getWhere()));
+                if (ifExistInjectConditionThenSkip && existInjectCondition(injectCondition, alias, statement.getWhere())) {
+                    return true;
+                }
+                statement.setWhere(buildCondition(op, injectCondition, alias, appendConditionToLeft, statement.getWhere()));
                 change[0] = true;
                 return true;
             }
@@ -140,7 +148,10 @@ public class ASTDruidConditionUtil {
                     return true;
                 }
                 String alias = getAlias(from);
-                statement.setCondition(buildCondition(op, injectCondition, alias, left, statement.getCondition()));
+                if (ifExistInjectConditionThenSkip && existInjectCondition(injectCondition, alias, statement.getCondition())) {
+                    return true;
+                }
+                statement.setCondition(buildCondition(op, injectCondition, alias, appendConditionToLeft, statement.getCondition()));
                 change[0] = true;
                 return true;
             }
@@ -165,7 +176,10 @@ public class ASTDruidConditionUtil {
                             continue;
                         }
                         String alias = getAlias(tableSource);
-                        statement.setWhere(buildCondition(op, injectCondition, alias, left, statement.getWhere()));
+                        if (ifExistInjectConditionThenSkip && existInjectCondition(injectCondition, alias, statement.getWhere())) {
+                            continue;
+                        }
+                        statement.setWhere(buildCondition(op, injectCondition, alias, appendConditionToLeft, statement.getWhere()));
                         change[0] = true;
                     }
                 }
@@ -197,7 +211,10 @@ public class ASTDruidConditionUtil {
                         if (skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
                             continue;
                         }
-                        statement.setWhere(buildCondition(op, injectCondition, alias, left, statement.getWhere()));
+                        if (ifExistInjectConditionThenSkip && existInjectCondition(injectCondition, alias, statement.getWhere())) {
+                            continue;
+                        }
+                        statement.setWhere(buildCondition(op, injectCondition, alias, appendConditionToLeft, statement.getWhere()));
                         change[0] = true;
                     }
                 }
@@ -210,6 +227,55 @@ public class ASTDruidConditionUtil {
             }
         });
         return change[0];
+    }
+
+    public static List<SQLObject> flatList(SQLExpr injectCondition, SQLExpr item, String itemAlias) {
+        LinkedList<SQLObject> temp = new LinkedList<>();
+        temp.add(injectCondition);
+        while (!temp.isEmpty()) {
+            SQLObject injectConditionItem = temp.removeFirst();
+            if (item == null) {
+                continue;
+            }
+
+            if (item instanceof SQLExpr) {
+                SQLExpr itemExpr = (SQLExpr) item;
+                if (equals(injectCondition, itemExpr, alias)) {
+                    return true;
+                }
+                List<SQLObject> next = itemExpr.getChildren();
+                if (next != null && !next.isEmpty()) {
+                    temp.addAll(next);
+                }
+            }
+        }
+        return injectCondition.equals(item);
+    }
+
+    public static boolean existInjectCondition(SQLExpr injectCondition, String alias, SQLExpr where) {
+        if (where == null) {
+            return false;
+        }
+        LinkedList<SQLObject> temp = new LinkedList<>();
+        temp.add(injectCondition);
+        while (!temp.isEmpty()) {
+            SQLObject item = temp.removeFirst();
+            if (item == null) {
+                continue;
+            }
+
+            if (item instanceof SQLExpr) {
+                SQLExpr itemExpr = (SQLExpr) item;
+                if (!equals(injectCondition, itemExpr, alias)) {
+                    return true;
+                }
+                List<SQLObject> next = itemExpr.getChildren();
+                if (next != null && !next.isEmpty()) {
+                    temp.addAll(next);
+                }
+            }
+        }
+        return false;
     }
 
     public static SQLExpr buildCondition(SQLBinaryOperator op, SQLExpr injectCondition, String alias, boolean left, SQLExpr where) {
