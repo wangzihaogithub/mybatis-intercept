@@ -11,6 +11,7 @@ import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.plugin.*;
 
 import java.lang.reflect.Method;
+import java.time.temporal.TemporalAccessor;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -97,7 +98,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             }
 
             Object parameterObject = boundSql.getAdditionalParameter(MybatisUtil.getAdditionalParameterPropertyName(parameterMapping));
-            if (parameterObject == null) {
+            if (parameterObject == null || isBasicType(parameterObject)) {
                 parameterObject = boundSql.getParameterObject();
             }
             boolean setPropertyValueSuccess = setPropertyValue(parameterObject, property, value);
@@ -106,6 +107,18 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             }
         }
         return setterSuccess;
+    }
+
+    protected boolean isBasicType(Object value) {
+        if (value == null) {
+            return false;
+        }
+        return value.getClass().isPrimitive()
+                || value instanceof Number
+                || value instanceof CharSequence
+                || value instanceof Date
+                || value instanceof TemporalAccessor
+                || value instanceof Enum;
     }
 
     protected boolean setPropertyValue(Object parameterObject, String property, Object value) {
