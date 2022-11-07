@@ -19,12 +19,11 @@ Mybatis拦截器 （可以用于租户隔离）
 1.  添加maven依赖, 在pom.xml中加入 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.wangzihaogithub/mybatis-intercept/badge.svg)](https://search.maven.org/search?q=g:com.github.wangzihaogithub%20AND%20a:mybatis-intercept)
 
 
-        <!-- 登录access_token拦截器 -->
         <!-- https://mvnrepository.com/artifact/com.github.wangzihaogithub/mybatis-intercept -->
         <dependency>
             <groupId>com.github.wangzihaogithub</groupId>
             <artifactId>mybatis-intercept</artifactId>
-            <version>1.0.0</version>
+            <version>1.0.1</version>
         </dependency>
         
 2.  配置 mybatis-config.xml

@@ -88,17 +88,23 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
     protected boolean invokeParameterObjectSetter(Object parameterObject, ParameterMapping parameterMapping, Object value) {
         String property = parameterMapping.getProperty();
         Map beanHandler;
+        Object existValue;
         if (parameterObject instanceof Map) {
             beanHandler = (Map) parameterObject;
+            if (beanHandler.containsKey(property)) {
+                existValue = beanHandler.get(property);
+            } else {
+                existValue = null;
+            }
         } else {
             beanHandler = new BeanMap(parameterObject);
             // 用户实体类里没有这个属性
             if (!beanHandler.containsKey(property)) {
                 return false;
             }
+            existValue = beanHandler.get(property);
         }
 
-        Object existValue = beanHandler.get(property);
         if (existValue != null && !"".equals(existValue)) {
             // 用户自己赋值了, 不更改用户填的值
         } else {

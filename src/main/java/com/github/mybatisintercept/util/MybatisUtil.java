@@ -15,7 +15,7 @@ import java.util.*;
 public class MybatisUtil {
     public final static int INDEX_MAPPED_STATEMENT = 0;
     public final static int INDEX_PARAMETER = 1;
-    private static final Map<String, Method> MAPPED_STATEMENT_METHOD_LRU_MAP = new LinkedHashMap<String, Method>() {
+    private static final Map<String, Method> MAPPED_STATEMENT_METHOD_LRU_MAP = new LinkedHashMap<String, Method>(16, 0.75F, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Method> eldest) {
             return size() > 200;
