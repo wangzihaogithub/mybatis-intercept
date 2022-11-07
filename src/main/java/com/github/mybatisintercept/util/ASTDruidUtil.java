@@ -138,7 +138,7 @@ public class ASTDruidUtil {
         }
     }
 
-    public static boolean isInsertOrReplace(String rawSql, String dbType) {
+    public static boolean isUpdate(String rawSql, String dbType) {
         List<SQLStatement> statementList;
         try {
             statementList = SQLUtils.parseStatements(rawSql, dbType);
@@ -150,7 +150,30 @@ public class ASTDruidUtil {
             return false;
         }
         SQLStatement sqlStatement = statementList.get(0);
-        return sqlStatement instanceof SQLInsertStatement || sqlStatement instanceof SQLReplaceStatement;
+        return sqlStatement instanceof SQLUpdateStatement;
+    }
+
+    public static boolean isNoSkipInsertOrReplace(String rawSql, String dbType, BiPredicate<String, String> skip) {
+        List<SQLStatement> statementList;
+        try {
+            statementList = SQLUtils.parseStatements(rawSql, dbType);
+        } catch (Exception e) {
+            return false;
+        }
+        // SingleStatement
+        if (statementList.size() != 1) {
+            return false;
+        }
+        SQLStatement sqlStatement = statementList.get(0);
+        if (sqlStatement instanceof SQLInsertStatement) {
+            SQLExprTableSource tableSource = ((SQLInsertStatement) sqlStatement).getTableSource();
+            return !skip.test(tableSource.getSchema(), tableSource.getName().getSimpleName());
+        } else if (sqlStatement instanceof SQLReplaceStatement) {
+            SQLExprTableSource tableSource = ((SQLReplaceStatement) sqlStatement).getTableSource();
+            return !skip.test(tableSource.getSchema(), tableSource.getName().getSimpleName());
+        } else {
+            return false;
+        }
     }
 
     public static boolean isSingleStatementAndSupportWhere(String rawSql, String dbType) {

@@ -64,6 +64,34 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+        String from = ASTDruidUtil.addAndCondition("SELECT\n" +
+                "\ta.id,\n" +
+                "\ta.oid,\n" +
+                "\ta.rid,\n" +
+                "\ta.type,\n" +
+                "\tr.NAME,\n" +
+                "\tr.description,\n" +
+                "\tr.roles \n" +
+                "FROM\n" +
+                "\tp_role_acl a,\n" +
+                "\tp_role r " +
+                "WHERE\n" +
+                "\ta.oid = ? \n" +
+                "\tAND a.type = ? \n" +
+                "\tAND a.rid = r.id \n" +
+                "\tAND a.is_delete = 0 \n" +
+                "\tAND r.is_delete = 0", "tenant_id = 2", "mysql");
+        Assert.assertEquals("SELECT a.id, a.oid, a.rid, a.type, r.NAME\n" +
+                "\t, r.description, r.roles\n" +
+                "FROM p_role_acl a, p_role r\n" +
+                "WHERE a.oid = ?\n" +
+                "\tAND a.type = ?\n" +
+                "\tAND a.rid = r.id\n" +
+                "\tAND a.is_delete = 0\n" +
+                "\tAND r.is_delete = 0\n" +
+                "\tAND a.tenant_id = 2\n" +
+                "\tAND r.tenant_id = 2", from);
+
         String injectConditionN = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
                 "tenant_id = 2 and name like 'a' or b > 10", "mysql");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +

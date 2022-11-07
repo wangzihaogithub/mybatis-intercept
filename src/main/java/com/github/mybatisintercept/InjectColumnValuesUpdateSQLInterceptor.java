@@ -6,7 +6,6 @@ import com.github.mybatisintercept.util.StaticMethodAccessor;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
-import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.plugin.*;
 
 import java.lang.reflect.Method;
@@ -15,12 +14,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiPredicate;
 
 /**
- * 自动给（insert语句, replace语句）加字段
+ * 自动给（update语句）加字段属性值， 如果值为空
  *
  * @author wangzihaogithub 2022-11-04
  */
 @Intercepts({@Signature(type = Executor.class, method = "update", args = {MappedStatement.class, Object.class})})
-public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
+public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
     private final Set<String> interceptPackageNames = new LinkedHashSet<>();
     private final AtomicBoolean initFlag = new AtomicBoolean();
     private final Set<String> skipTableNames = new LinkedHashSet<>();
@@ -48,51 +47,23 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
 
         InterceptContext interceptContext = new InterceptContext(invocation, this);
         if (isSupportIntercept(interceptContext)) {
-            String rawSql = MybatisUtil.getBoundSqlString(invocation);
-            String newSql = addColumnValues(interceptContext, rawSql);
-            if (!Objects.equals(rawSql, newSql)) {
-                MybatisUtil.rewriteSql(invocation, newSql);
-            }
+            addColumnValues(interceptContext);
         }
         return invocation.proceed();
     }
 
-    protected String addColumnValues(InterceptContext interceptContext, String rawSql) {
-        String newSql = rawSql;
+    protected void addColumnValues(InterceptContext interceptContext) {
+        BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
         for (ColumnMapping columnMapping : columnMappings) {
-            String columnName = columnMapping.getColumnName();
             Object columnValue = valueProvider.invokeWithOnBindContext(columnMapping.getAttrName(), interceptContext);
-
-            // 找sql里的参数化预编译问号下标
-            int columnParameterizedIndex = ASTDruidUtil.getColumnParameterizedIndex(newSql, columnName, dbType);
-            if (columnParameterizedIndex == -1) {
-                // 1. 用户没有填写column字段。给他加column。 对应： insert into x_table (`a`, `缺失`) values (?)
-                newSql = ASTDruidUtil.addColumnValues(newSql, columnName, columnValue, dbType);
-            } else if (columnParameterizedIndex == -2) {
-                // 2. 用户主动填写了column字段, values是有值的常量. 不管他。对应：insert into x_table (`a`, `b`) values (?, 1)
-            } else {
-                // 3. 用户主动填写了column字段, values是参数化. 就给对象赋值，对应：insert into x_table (`a`, `b`) values (?, ?)
-                BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
-                String property = MybatisUtil.getParameterMappingProperty(boundSql, columnParameterizedIndex);
-
-                // 向实体类里自动回填属性值
-                boolean setterSuccess = MybatisUtil.invokeParameterObjectSetter(boundSql, property, columnValue);
-                if (!setterSuccess) {
-                    // 用户实体类里没有这个属性，删掉拼接的?参数, 改sql，将字段写为常量至values里
-                    List<ParameterMapping> removeParameterMappingList = MybatisUtil.removeParameterMapping(boundSql, property);
-                    if (removeParameterMappingList.size() > 0) {
-                        newSql = ASTDruidUtil.addColumnValues(newSql, columnName, columnValue, dbType);
-                    }
-                }
-            }
+            MybatisUtil.invokeParameterObjectSetter(boundSql, columnMapping.getProperty(), columnValue);
         }
-        return newSql;
     }
 
     protected boolean isSupportIntercept(InterceptContext interceptContext) {
         return MybatisUtil.isInterceptPackage(interceptContext.invocation, interceptPackageNames)
                 && existColumnValue(interceptContext)
-                && ASTDruidUtil.isNoSkipInsertOrReplace(MybatisUtil.getBoundSqlString(interceptContext.invocation), dbType, skipPredicate);
+                && ASTDruidUtil.isUpdate(MybatisUtil.getBoundSqlString(interceptContext.invocation), dbType);
     }
 
     protected boolean existColumnValue(InterceptContext interceptContext) {
@@ -115,11 +86,11 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
         if (properties == null || properties.isEmpty()) {
             properties = System.getProperties();
         }
-        String valueProvider = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
-        String dbType = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.dbType", "mysql");
-        String columnMappings = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.columnMappings", "tenant_id=tenantId"); // tenant_id=tenantId,u_id=uId
-        String interceptPackageNames = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
-        String skipTableNames = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.skipTableNames", "");
+        String valueProvider = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
+        String dbType = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.dbType", "mysql");
+        String columnMappings = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.columnMappings", "tenant_id=tenantId"); // tenant_id=tenantId,u_id=uId
+        String interceptPackageNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
+        String skipTableNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.skipTableNames", "");
 
         this.valueProvider = new StaticMethodAccessor<>(valueProvider);
         this.dbType = dbType;
@@ -160,33 +131,33 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
         this.valueProvider = valueProvider;
     }
 
-    public Set<String> getSkipTableNames() {
-        return skipTableNames;
-    }
-
     public BiPredicate<String, String> getSkipPredicate() {
         return skipPredicate;
     }
 
+    public Set<String> getSkipTableNames() {
+        return skipTableNames;
+    }
+
     public void setSkipPredicate(BiPredicate<String, String> skipPredicate) {
-        this.skipPredicate = skipPredicate;
+        this.skipPredicate = Objects.requireNonNull(skipPredicate);
     }
 
     public static class ColumnMapping {
-        private final String columnName;
         private final String attrName;
+        private final String property;
 
-        public ColumnMapping(String columnName, String attrName) {
-            this.columnName = columnName;
+        public ColumnMapping(String attrName, String property) {
             this.attrName = attrName;
-        }
-
-        public String getColumnName() {
-            return columnName;
+            this.property = property;
         }
 
         public String getAttrName() {
             return attrName;
+        }
+
+        public String getProperty() {
+            return property;
         }
 
         @Override
@@ -198,17 +169,17 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
                 return false;
             }
             ColumnMapping that = (ColumnMapping) o;
-            return Objects.equals(columnName, that.columnName) && Objects.equals(attrName, that.attrName);
+            return Objects.equals(property, that.property) && Objects.equals(attrName, that.attrName);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(columnName, attrName);
+            return Objects.hash(property, attrName);
         }
 
         @Override
         public String toString() {
-            return columnName + "=" + attrName;
+            return attrName + "=" + property;
         }
 
         public static Set<ColumnMapping> parse(String str) {
@@ -229,14 +200,14 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
 
     public static class InterceptContext {
         private final Invocation invocation;
-        private final InjectColumnValuesInsertSQLInterceptor interceptor;
+        private final InjectColumnValuesUpdateSQLInterceptor interceptor;
 
-        public InterceptContext(Invocation invocation, InjectColumnValuesInsertSQLInterceptor interceptor) {
+        public InterceptContext(Invocation invocation, InjectColumnValuesUpdateSQLInterceptor interceptor) {
             this.invocation = invocation;
             this.interceptor = interceptor;
         }
 
-        public InjectColumnValuesInsertSQLInterceptor getInterceptor() {
+        public InjectColumnValuesUpdateSQLInterceptor getInterceptor() {
             return interceptor;
         }
 

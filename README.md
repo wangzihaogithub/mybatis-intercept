@@ -3,11 +3,13 @@
 #### 介绍
 Mybatis拦截器 （可以用于租户隔离）
 
-1. InjectColumnValuesInsertSQLInterceptor.class = 自动给（insert语句, replace语句）加字段拦截器
+1. InjectColumnValuesInsertSQLInterceptor.class = 自动给（insert语句, replace语句）加字段
 
-2. InjectConditionSQLInterceptor.class = 自动给（select语句, update语句, delete语句, insert from语句）加条件
+2. InjectColumnValuesUpdateSQLInterceptor.class = 自动给（update语句）加字段属性值， 如果值为空
 
-3. InjectMapperParametersInterceptor.class = 给 mapper.xml 加全局内置属性（可以在 mapper.xml 里直接访问这些属性）
+3. InjectConditionSQLInterceptor.class = 自动给（select语句, update语句, delete语句, insert from语句）加条件
+
+4. InjectMapperParametersInterceptor.class = 给 mapper.xml 加全局内置属性（可以在 mapper.xml 里直接访问这些属性）
 
 
 #### 软件架构
@@ -31,35 +33,45 @@ Mybatis拦截器 （可以用于租户隔离）
 `
 
 
-            <?xml version="1.0" encoding="UTF-8" ?>
-            <!DOCTYPE configuration
-                    PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
-                    "http://mybatis.org/dtd/mybatis-3-config.dtd">
-            
-            <configuration>
-                <plugins>
-                    <!-- 最后执行 -->
-                    <plugin interceptor="com.github.pagehelper.PageInterceptor">
-                        <property name="helperDialect" value="mysql"/>
-                        <property name="reasonable" value="false"/>
-                        <property name="supportMethodsArguments" value="false"/>
-                        <property name="params" value="count=countSql"/>
-                    </plugin>
-            
-                    <plugin interceptor="com.github.mybatisintercept.InjectColumnValuesInsertSQLInterceptor">
-                        <property name="InjectColumnValuesInsertSQLInterceptor.skipTableNames" value="xx_table1,xx_table2"/>
-                        <property name="InjectColumnValuesInsertSQLInterceptor.valueProvider" value="com.xx.XXXUtil#getXXValue"/>
-                        <property name="InjectColumnValuesInsertSQLInterceptor.columnMappings" value="tenant_id=tenantId"/>
-                    </plugin>
-            
-                    <!-- 最先执行 -->
-                    <plugin interceptor="com.github.mybatisintercept.InjectConditionSQLInterceptor">
-                        <property name="InjectConditionSQLInterceptor.skipTableNames" value="xx_table1,xx_table2"/>
-                        <property name="InjectConditionSQLInterceptor.valueProvider" value="com.xx.XXXUtil#getXXValue"/>
-                        <property name="InjectConditionSQLInterceptor.conditionExpression" value="tenant_id = ${tenantId} and xx_name like '%${xxname}%' and xxx_name = '{xxxname}' "/>
-                    </plugin>
-                </plugins>
-            </configuration>
+        <?xml version="1.0" encoding="UTF-8" ?>
+        <!DOCTYPE configuration
+                PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+                "http://mybatis.org/dtd/mybatis-3-config.dtd">
+        <configuration>
+            <plugins>
+                <!-- 最后执行 -->
+                <plugin interceptor="com.ig.util.IGForceMasterJadeSQLInterceptor"/>
+        
+                <plugin interceptor="com.github.pagehelper.PageInterceptor">
+                    <property name="helperDialect" value="mysql"/>
+                    <property name="reasonable" value="false"/>
+                    <property name="supportMethodsArguments" value="false"/>
+                    <property name="params" value="count=countSql"/>
+                </plugin>
+        
+                <plugin interceptor="com.github.mybatisintercept.InjectColumnValuesInsertSQLInterceptor">
+                    <property name="InjectColumnValuesInsertSQLInterceptor.skipTableNames" value="base_holidays,base_subway,base_area,offset,task,hibernate_sequence,help_topic,mapping,sequence_table"/>
+                    <property name="InjectColumnValuesInsertSQLInterceptor.valueProvider" value="com.github.securityfilter.util.AccessUserUtil#getAccessUserValue"/>
+                    <property name="InjectColumnValuesInsertSQLInterceptor.columnMappings" value="tenant_id=tenantId"/>
+                </plugin>
+        
+                <plugin interceptor="com.github.mybatisintercept.InjectColumnValuesUpdateSQLInterceptor">
+                    <property name="InjectColumnValuesUpdateSQLInterceptor.skipTableNames" value="base_holidays,base_subway,base_area,offset,task,hibernate_sequence,help_topic,mapping,sequence_table"/>
+                    <property name="InjectColumnValuesUpdateSQLInterceptor.valueProvider" value="com.github.securityfilter.util.AccessUserUtil#getAccessUserValue"/>
+                    <property name="InjectColumnValuesUpdateSQLInterceptor.columnMappings" value="tenantId"/>
+                </plugin>
+        
+                <!-- 最先执行 -->
+                <plugin interceptor="com.github.mybatisintercept.InjectConditionSQLInterceptor">
+                    <property name="InjectConditionSQLInterceptor.skipTableNames" value="base_holidays,base_subway,base_area,offset,task,hibernate_sequence,help_topic,mapping,sequence_table"/>
+                    <property name="InjectConditionSQLInterceptor.valueProvider" value="com.github.securityfilter.util.AccessUserUtil#getAccessUserValue"/>
+                    <property name="InjectConditionSQLInterceptor.conditionExpression" value="tenant_id = ${tenantId}"/>
+                    <property name="InjectConditionSQLInterceptor.existInjectConditionStrategyEnum" value="RULE_TABLE_MATCH_THEN_SKIP_SQL"/>
+                </plugin>
+            </plugins>
+        </configuration>
+        
+        
 
 
         如果是springboot项目，需要在application.yaml里加上

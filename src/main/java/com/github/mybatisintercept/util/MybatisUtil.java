@@ -231,6 +231,72 @@ public class MybatisUtil {
         return removeList;
     }
 
+    public static boolean invokeParameterObjectSetter(BoundSql boundSql, String property, Object value) {
+        boolean setterSuccess = true;
+        for (ParameterMapping parameterMapping : boundSql.getParameterMappings()) {
+            if (!MybatisUtil.isEqualsProperty(parameterMapping, property)) {
+                continue;
+            }
+
+            Object parameterObject = boundSql.getAdditionalParameter(MybatisUtil.getAdditionalParameterPropertyName(parameterMapping));
+            if (parameterObject == null || isBasicType(parameterObject)) {
+                parameterObject = boundSql.getParameterObject();
+            }
+            boolean setPropertyValueSuccess = setPropertyValue(parameterObject, property, value);
+            if (!setPropertyValueSuccess) {
+                setterSuccess = false;
+            }
+        }
+        return setterSuccess;
+    }
+
+    public static boolean setPropertyValue(Object parameterObject, String property, Object value) {
+        Map beanHandler;
+        Object existValue;
+        if (parameterObject == null) {
+            return true;
+        } else if (parameterObject instanceof Map) {
+            beanHandler = (Map) parameterObject;
+            if (beanHandler.containsKey(property)) {
+                existValue = beanHandler.get(property);
+            } else {
+                existValue = null;
+            }
+        } else {
+            beanHandler = new BeanMap(parameterObject);
+            // 用户实体类里没有这个属性
+            if (!beanHandler.containsKey(property)) {
+                return false;
+            }
+            existValue = beanHandler.get(property);
+        }
+
+        if (existValue != null && !"".equals(existValue)) {
+            // 用户自己赋值了, 不更改用户填的值
+        } else {
+            // 用户没有赋值，自动回填至实体类
+            try {
+                beanHandler.put(property, value);
+            } catch (UnsupportedOperationException | IllegalStateException e) {
+                // 不可变Map
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isBasicType(Object value) {
+        if (value == null) {
+            return false;
+        }
+        return value.getClass().isPrimitive()
+                || value instanceof Number
+                || value instanceof CharSequence
+                || value instanceof Date
+                || value instanceof TemporalAccessor
+                || value instanceof Enum;
+    }
+
     private static String delimitedArrayToString(String[] in) {
         if (in == null || in.length == 0) {
             return null;

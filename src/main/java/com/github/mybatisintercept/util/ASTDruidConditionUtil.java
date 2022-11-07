@@ -185,11 +185,23 @@ public class ASTDruidConditionUtil {
                     return true;
                 }
                 String alias = getAlias(from);
-                if (existInjectCondition(injectConditionColumnList, alias, statement.getCondition())) {
-                    exist[0] = true;
-                    return false;
+                switch (statement.getJoinType()) {
+                    case COMMA: {
+                        SQLObject parent = statement.getParent();
+                        if (parent instanceof SQLSelectQueryBlock && existInjectCondition(injectConditionColumnList, alias, ((SQLSelectQueryBlock) parent).getWhere())) {
+                            exist[0] = true;
+                            return false;
+                        }
+                        return true;
+                    }
+                    default: {
+                        if (existInjectCondition(injectConditionColumnList, alias, statement.getCondition())) {
+                            exist[0] = true;
+                            return false;
+                        }
+                        return true;
+                    }
                 }
-                return true;
             }
 
             @Override
@@ -309,12 +321,18 @@ public class ASTDruidConditionUtil {
                     return true;
                 }
                 String alias = getAlias(from);
+                if (addWhere(statement, alias)) {
+                    change[0] = true;
+                }
+                return true;
+            }
+
+            private boolean addWhere(SQLSelectQueryBlock statement, String alias) {
                 if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
                         && existInjectCondition(injectConditionColumnList, alias, statement.getWhere())) {
-                    return true;
+                    return false;
                 }
                 statement.setWhere(buildCondition(op, injectCondition, alias, appendConditionToLeft, statement.getWhere()));
-                change[0] = true;
                 return true;
             }
 
@@ -333,13 +351,24 @@ public class ASTDruidConditionUtil {
                     return true;
                 }
                 String alias = getAlias(from);
-                if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
-                        && existInjectCondition(injectConditionColumnList, alias, statement.getCondition())) {
-                    return true;
+                switch (statement.getJoinType()) {
+                    case COMMA: {
+                        SQLObject parent = statement.getParent();
+                        if (parent instanceof SQLSelectQueryBlock && addWhere((SQLSelectQueryBlock) parent, alias)) {
+                            change[0] = true;
+                        }
+                        return true;
+                    }
+                    default: {
+                        if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
+                                && existInjectCondition(injectConditionColumnList, alias, statement.getCondition())) {
+                            return true;
+                        }
+                        statement.setCondition(buildCondition(op, injectCondition, alias, appendConditionToLeft, statement.getCondition()));
+                        change[0] = true;
+                        return true;
+                    }
                 }
-                statement.setCondition(buildCondition(op, injectCondition, alias, appendConditionToLeft, statement.getCondition()));
-                change[0] = true;
-                return true;
             }
 
             @Override
