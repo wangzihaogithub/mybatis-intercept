@@ -6,6 +6,7 @@ import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.mapping.SqlSource;
 import org.apache.ibatis.plugin.Invocation;
+import org.apache.ibatis.scripting.xmltags.ForEachSqlNode;
 import org.apache.ibatis.session.Configuration;
 
 import java.lang.reflect.Method;
@@ -15,7 +16,7 @@ import java.util.*;
 public class MybatisUtil {
     public final static int INDEX_MAPPED_STATEMENT = 0;
     public final static int INDEX_PARAMETER = 1;
-    private static final Map<String, Method> MAPPED_STATEMENT_METHOD_LRU_MAP = new LinkedHashMap<String, Method>(16, 0.75F, true) {
+    private static final Map<String, Method> MAPPED_STATEMENT_METHOD_LRU_MAP = new LinkedHashMap<String, Method>(64, 0.75F, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Method> eldest) {
             return size() > 200;
@@ -53,6 +54,18 @@ public class MybatisUtil {
 
     public static Object getParameter(Invocation invocation) {
         return invocation.getArgs()[INDEX_PARAMETER];
+    }
+
+    public static boolean setBoundSql(Invocation invocation, BoundSql boundSql) {
+        Object[] args = invocation.getArgs();
+        for (int i = 0; i < args.length; i++) {
+            Object arg = args[i];
+            if (arg instanceof BoundSql) {
+                args[i] = boundSql;
+                return true;
+            }
+        }
+        return false;
     }
 
     public static BoundSql getBoundSql(Invocation invocation) {
@@ -107,6 +120,7 @@ public class MybatisUtil {
         MappedStatement ms = getMappedStatement(invocation);
         BoundSql boundSql = getBoundSql(invocation);
         setMappedStatement(invocation, newMappedStatement(ms, boundSql, sql));
+        setBoundSql(invocation, boundSql);
     }
 
     public static MappedStatement newMappedStatement(MappedStatement ms, BoundSql boundSql, String sql) {
@@ -165,6 +179,56 @@ public class MybatisUtil {
 
         BoundSql boundSql = getBoundSql(invocation);
         boundSql.setAdditionalParameter(name, value);
+    }
+
+    public static String getParameterMappingProperty(BoundSql boundSql, int columnParameterizedIndex) {
+        ParameterMapping parameterMapping = boundSql.getParameterMappings().get(columnParameterizedIndex);
+        return getParameterMappingProperty(parameterMapping);
+    }
+
+    public static String getParameterMappingProperty(ParameterMapping parameterMapping) {
+        String property = parameterMapping.getProperty();
+        if (property.startsWith(ForEachSqlNode.ITEM_PREFIX)) {
+            String[] split = property.split("\\.");
+            return split[split.length - 1];
+        } else {
+            return property;
+        }
+    }
+
+    public static String getAdditionalParameterPropertyName(ParameterMapping parameterMapping) {
+        String propertyName = parameterMapping.getProperty();
+        if (propertyName.startsWith(ForEachSqlNode.ITEM_PREFIX)) {
+            for (int i = propertyName.length() - 1; i >= 0; i--) {
+                char c = propertyName.charAt(i);
+                if (c == '.') {
+                    return propertyName.substring(0, i);
+                }
+            }
+            return propertyName;
+        } else {
+            return propertyName;
+        }
+    }
+
+    public static boolean isEqualsProperty(ParameterMapping parameterMapping, String property) {
+        String parameterMappingProperty = parameterMapping.getProperty();
+        if (parameterMappingProperty.startsWith(ForEachSqlNode.ITEM_PREFIX)) {
+            return parameterMappingProperty.endsWith("." + property);
+        } else {
+            return Objects.equals(parameterMappingProperty, property);
+        }
+    }
+
+    public static List<ParameterMapping> removeParameterMapping(BoundSql boundSql, String property) {
+        List<ParameterMapping> removeList = new ArrayList<>();
+        for (ParameterMapping parameterMapping : boundSql.getParameterMappings()) {
+            if (isEqualsProperty(parameterMapping, property)) {
+                removeList.add(parameterMapping);
+            }
+        }
+        boundSql.getParameterMappings().removeAll(removeList);
+        return removeList;
     }
 
     private static String delimitedArrayToString(String[] in) {

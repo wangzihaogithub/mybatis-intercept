@@ -69,29 +69,43 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             } else {
                 // 3. 用户主动填写了column字段, values是参数化. 就给对象赋值，对应：insert into x_table (`a`, `b`) values (?, ?)
                 BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
-                List<ParameterMapping> parameterMappingList = boundSql.getParameterMappings();
-                ParameterMapping parameterMapping = parameterMappingList.get(columnParameterizedIndex);
-                Object parameterObject = boundSql.getParameterObject();
+                String property = MybatisUtil.getParameterMappingProperty(boundSql, columnParameterizedIndex);
 
                 // 向实体类里自动回填属性值
-                boolean setterSuccess;
-                try {
-                    setterSuccess = invokeParameterObjectSetter(parameterObject, parameterMapping, columnValue);
-                } catch (UnsupportedOperationException | IllegalStateException e) {
-                    setterSuccess = false;
-                }
+                boolean setterSuccess = invokeParameterObjectSetter(boundSql, property, columnValue);
                 if (!setterSuccess) {
                     // 用户实体类里没有这个属性，删掉拼接的?参数, 改sql，将字段写为常量至values里
-                    parameterMappingList.remove(columnParameterizedIndex);
-                    newSql = ASTDruidUtil.addColumnValues(newSql, columnName, columnValue, dbType);
+                    List<ParameterMapping> removeParameterMappingList = MybatisUtil.removeParameterMapping(boundSql, property);
+                    if (removeParameterMappingList.size() > 0) {
+                        newSql = ASTDruidUtil.addColumnValues(newSql, columnName, columnValue, dbType);
+                    }
                 }
             }
         }
         return newSql;
     }
 
-    protected boolean invokeParameterObjectSetter(Object parameterObject, ParameterMapping parameterMapping, Object value) throws UnsupportedOperationException {
-        String property = parameterMapping.getProperty();
+    protected boolean existValue(Object value) {
+        return value != null && !"".equals(value);
+    }
+
+    protected boolean invokeParameterObjectSetter(BoundSql boundSql, String property, Object value) {
+        boolean setterSuccess = true;
+        for (ParameterMapping parameterMapping : boundSql.getParameterMappings()) {
+            if (!MybatisUtil.isEqualsProperty(parameterMapping, property)) {
+                continue;
+            }
+
+            Object parameterObject = boundSql.getAdditionalParameter(MybatisUtil.getAdditionalParameterPropertyName(parameterMapping));
+            boolean setPropertyValueSuccess = setPropertyValue(parameterObject, property, value);
+            if (!setPropertyValueSuccess) {
+                setterSuccess = false;
+            }
+        }
+        return setterSuccess;
+    }
+
+    protected boolean setPropertyValue(Object parameterObject, String property, Object value) {
         Map beanHandler;
         Object existValue;
         if (parameterObject instanceof Map) {
@@ -110,12 +124,16 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             existValue = beanHandler.get(property);
         }
 
-        if (existValue != null && !"".equals(existValue)) {
+        if (existValue(existValue)) {
             // 用户自己赋值了, 不更改用户填的值
         } else {
             // 用户没有赋值，自动回填至实体类
-            // throws UnsupportedOperationException
-            beanHandler.put(property, value);
+            try {
+                beanHandler.put(property, value);
+            } catch (UnsupportedOperationException | IllegalStateException e) {
+                // 不可变Map
+                return false;
+            }
         }
         return true;
     }

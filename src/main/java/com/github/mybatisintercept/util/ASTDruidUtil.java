@@ -139,7 +139,12 @@ public class ASTDruidUtil {
     }
 
     public static boolean isInsertOrReplace(String rawSql, String dbType) {
-        List<SQLStatement> statementList = SQLUtils.parseStatements(rawSql, dbType);
+        List<SQLStatement> statementList;
+        try {
+            statementList = SQLUtils.parseStatements(rawSql, dbType);
+        } catch (Exception e) {
+            return false;
+        }
         // SingleStatement
         if (statementList.size() != 1) {
             return false;
@@ -149,14 +154,18 @@ public class ASTDruidUtil {
     }
 
     public static boolean isSingleStatementAndSupportWhere(String rawSql, String dbType) {
-        List<SQLStatement> sqlStatements = SQLUtils.parseStatements(rawSql, dbType);
+        List<SQLStatement> sqlStatements;
+        try {
+            sqlStatements = SQLUtils.parseStatements(rawSql, dbType);
+        } catch (Exception e) {
+            return false;
+        }
         // SingleStatement
         if (sqlStatements.size() != 1) {
             return false;
         }
         return isSupportWhere(sqlStatements.get(0));
     }
-
 
     public static int getColumnParameterizedIndex(String rawSql, String columnName, String dbType) {
         List<SQLStatement> sqlStatements = SQLUtils.parseStatements(rawSql, dbType);
