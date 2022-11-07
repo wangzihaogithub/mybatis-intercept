@@ -97,6 +97,9 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             }
 
             Object parameterObject = boundSql.getAdditionalParameter(MybatisUtil.getAdditionalParameterPropertyName(parameterMapping));
+            if (parameterObject == null) {
+                parameterObject = boundSql.getParameterObject();
+            }
             boolean setPropertyValueSuccess = setPropertyValue(parameterObject, property, value);
             if (!setPropertyValueSuccess) {
                 setterSuccess = false;
@@ -108,7 +111,9 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
     protected boolean setPropertyValue(Object parameterObject, String property, Object value) {
         Map beanHandler;
         Object existValue;
-        if (parameterObject instanceof Map) {
+        if (parameterObject == null) {
+            return true;
+        } else if (parameterObject instanceof Map) {
             beanHandler = (Map) parameterObject;
             if (beanHandler.containsKey(property)) {
                 existValue = beanHandler.get(property);
