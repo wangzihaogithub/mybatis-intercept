@@ -74,7 +74,12 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
                 Object parameterObject = boundSql.getParameterObject();
 
                 // 向实体类里自动回填属性值
-                boolean setterSuccess = invokeParameterObjectSetter(parameterObject, parameterMapping, columnValue);
+                boolean setterSuccess;
+                try {
+                    setterSuccess = invokeParameterObjectSetter(parameterObject, parameterMapping, columnValue);
+                } catch (UnsupportedOperationException | IllegalStateException e) {
+                    setterSuccess = false;
+                }
                 if (!setterSuccess) {
                     // 用户实体类里没有这个属性，删掉拼接的?参数, 改sql，将字段写为常量至values里
                     parameterMappingList.remove(columnParameterizedIndex);
@@ -85,7 +90,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
         return newSql;
     }
 
-    protected boolean invokeParameterObjectSetter(Object parameterObject, ParameterMapping parameterMapping, Object value) {
+    protected boolean invokeParameterObjectSetter(Object parameterObject, ParameterMapping parameterMapping, Object value) throws UnsupportedOperationException {
         String property = parameterMapping.getProperty();
         Map beanHandler;
         Object existValue;
@@ -109,6 +114,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             // 用户自己赋值了, 不更改用户填的值
         } else {
             // 用户没有赋值，自动回填至实体类
+            // throws UnsupportedOperationException
             beanHandler.put(property, value);
         }
         return true;
