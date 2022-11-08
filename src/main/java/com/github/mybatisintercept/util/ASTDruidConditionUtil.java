@@ -220,7 +220,7 @@ public class ASTDruidConditionUtil {
                         temp.add(((SQLJoinTableSource) tableSource).getLeft());
                         temp.add(((SQLJoinTableSource) tableSource).getRight());
                     } else {
-                        if (skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
+                        if (isSubqueryOrUnion(tableSource) || skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
                             continue;
                         }
                         String alias = getAlias(tableSource);
@@ -255,7 +255,7 @@ public class ASTDruidConditionUtil {
                         temp.add(((SQLJoinTableSource) tableSource).getRight());
                     } else {
                         String alias = getAlias(tableSource);
-                        if (skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
+                        if (isSubqueryOrUnion(tableSource) || skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
                             continue;
                         }
                         if (existInjectCondition(injectConditionColumnList, alias, statement.getWhere())) {
@@ -387,7 +387,7 @@ public class ASTDruidConditionUtil {
                         temp.add(((SQLJoinTableSource) tableSource).getLeft());
                         temp.add(((SQLJoinTableSource) tableSource).getRight());
                     } else {
-                        if (skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
+                        if (isSubqueryOrUnion(tableSource) || skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
                             continue;
                         }
                         String alias = getAlias(tableSource);
@@ -424,7 +424,7 @@ public class ASTDruidConditionUtil {
                         temp.add(((SQLJoinTableSource) tableSource).getRight());
                     } else {
                         String alias = getAlias(tableSource);
-                        if (skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
+                        if (isSubqueryOrUnion(tableSource) || skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
                             continue;
                         }
                         if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM

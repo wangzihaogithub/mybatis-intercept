@@ -850,6 +850,27 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void update() {
+        String join = ASTDruidUtil.addAndCondition(" update pipeline\n" +
+                "      left join (select interview_time, pipeline_id from `pipeline_interview`\n" +
+                "      where delete_flag = 0 and cancel_interview_flag = 0 and pipeline_id = 1\n" +
+                "      order by create_time desc,id desc limit 1) t2 on t2.pipeline_id = pipeline.id\n" +
+                "      set pipeline.last_interview_time = t2.interview_time where pipeline.id = 1", "tenant_id = 2", "mysql");
+        Assert.assertEquals("UPDATE pipeline\n" +
+                "\tLEFT JOIN (\n" +
+                "\t\tSELECT interview_time, pipeline_id\n" +
+                "\t\tFROM `pipeline_interview`\n" +
+                "\t\tWHERE delete_flag = 0\n" +
+                "\t\t\tAND cancel_interview_flag = 0\n" +
+                "\t\t\tAND pipeline_id = 1\n" +
+                "\t\t\tAND pipeline_interview.tenant_id = 2\n" +
+                "\t\tORDER BY create_time DESC, id DESC\n" +
+                "\t\tLIMIT 1\n" +
+                "\t) t2\n" +
+                "\tON t2.pipeline_id = pipeline.id\n" +
+                "SET pipeline.last_interview_time = t2.interview_time\n" +
+                "WHERE pipeline.id = 1\n" +
+                "\tAND pipeline.tenant_id = 2", join);
+
         String update1 = ASTDruidUtil.addAndCondition(" UPDATE user t1 SET `status` = 0 WHERE id = 1 or name = 2", "tenant_id = 2", "mysql");
         Assert.assertEquals("UPDATE user t1\n" +
                 "SET `status` = 0\n" +
