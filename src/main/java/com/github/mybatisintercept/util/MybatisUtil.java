@@ -172,8 +172,8 @@ public class MybatisUtil {
             }
         } else {
             // Bean
-            Map<String, Object> beanMap = new BeanMap(parameter);
-            beanMap.put(name, value);
+            BeanMap beanMap = new BeanMap(parameter);
+            beanMap.set(name, value);
             setParameter(invocation, beanMap);
         }
 
@@ -242,6 +242,10 @@ public class MybatisUtil {
             if (parameterObject == null || isBasicType(parameterObject)) {
                 parameterObject = boundSql.getParameterObject();
             }
+            Class<?> javaType = parameterMapping.getJavaType();
+            if (javaType != null) {
+                value = TypeUtil.cast(value, javaType);
+            }
             boolean setPropertyValueSuccess = setPropertyValue(parameterObject, property, value);
             if (!setPropertyValueSuccess) {
                 setterSuccess = false;
@@ -276,7 +280,11 @@ public class MybatisUtil {
         } else {
             // 用户没有赋值，自动回填至实体类
             try {
-                beanHandler.put(property, value);
+                if (beanHandler instanceof BeanMap) {
+                    ((BeanMap) beanHandler).set(property, value);
+                } else {
+                    beanHandler.put(property, value);
+                }
             } catch (UnsupportedOperationException | IllegalStateException e) {
                 // 不可变Map
                 return false;
