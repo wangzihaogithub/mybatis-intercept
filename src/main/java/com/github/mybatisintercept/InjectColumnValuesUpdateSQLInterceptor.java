@@ -63,7 +63,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
     protected boolean isSupportIntercept(InterceptContext interceptContext) {
         return MybatisUtil.isInterceptPackage(interceptContext.invocation, interceptPackageNames)
                 && existColumnValue(interceptContext)
-                && ASTDruidUtil.isUpdate(MybatisUtil.getBoundSqlString(interceptContext.invocation), dbType);
+                && ASTDruidUtil.isNoSkipUpdate(MybatisUtil.getBoundSqlString(interceptContext.invocation), dbType, skipPredicate);
     }
 
     protected boolean existColumnValue(InterceptContext interceptContext) {
@@ -88,7 +88,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         }
         String valueProvider = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
         String dbType = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.dbType", "mysql");
-        String columnMappings = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.columnMappings", "tenant_id=tenantId"); // tenant_id=tenantId,u_id=uId
+        String columnMappings = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.columnMappings", "tenantId=tenantId"); // tenantId=tenantId,tenantId
         String interceptPackageNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.skipTableNames", "");
 

@@ -138,7 +138,7 @@ public class ASTDruidUtil {
         }
     }
 
-    public static boolean isUpdate(String rawSql, String dbType) {
+    public static boolean isNoSkipUpdate(String rawSql, String dbType, BiPredicate<String, String> skip) {
         List<SQLStatement> statementList;
         try {
             statementList = SQLUtils.parseStatements(rawSql, dbType);
@@ -150,7 +150,23 @@ public class ASTDruidUtil {
             return false;
         }
         SQLStatement sqlStatement = statementList.get(0);
-        return sqlStatement instanceof SQLUpdateStatement;
+        if (sqlStatement instanceof SQLUpdateStatement) {
+            SQLTableSource tableSource = ((SQLUpdateStatement) sqlStatement).getTableSource();
+            if (tableSource instanceof SQLExprTableSource) {
+                // 单表
+                SQLExprTableSource table = (SQLExprTableSource) tableSource;
+                return !skip.test(SQLUtils.normalize(table.getSchema(), null), SQLUtils.normalize(table.getName().getSimpleName(), null));
+            } else if (tableSource instanceof SQLJoinTableSource) {
+                // todo 多表
+                return true;
+            } else {
+                // 其他未知语法
+                return false;
+            }
+        } else {
+            // 非update语句
+            return false;
+        }
     }
 
     public static boolean isNoSkipInsertOrReplace(String rawSql, String dbType, BiPredicate<String, String> skip) {
@@ -166,11 +182,11 @@ public class ASTDruidUtil {
         }
         SQLStatement sqlStatement = statementList.get(0);
         if (sqlStatement instanceof SQLInsertStatement) {
-            SQLExprTableSource tableSource = ((SQLInsertStatement) sqlStatement).getTableSource();
-            return !skip.test(tableSource.getSchema(), tableSource.getName().getSimpleName());
+            SQLExprTableSource table = ((SQLInsertStatement) sqlStatement).getTableSource();
+            return !skip.test(SQLUtils.normalize(table.getSchema(), null), SQLUtils.normalize(table.getName().getSimpleName(), null));
         } else if (sqlStatement instanceof SQLReplaceStatement) {
-            SQLExprTableSource tableSource = ((SQLReplaceStatement) sqlStatement).getTableSource();
-            return !skip.test(tableSource.getSchema(), tableSource.getName().getSimpleName());
+            SQLExprTableSource table = ((SQLReplaceStatement) sqlStatement).getTableSource();
+            return !skip.test(SQLUtils.normalize(table.getSchema(), null), SQLUtils.normalize(table.getName().getSimpleName(), null));
         } else {
             return false;
         }
