@@ -277,20 +277,21 @@ public class MybatisUtil {
 
         if (existValue != null && !"".equals(existValue)) {
             // 用户自己赋值了, 不更改用户填的值
+            return true;
         } else {
             // 用户没有赋值，自动回填至实体类
             try {
                 if (beanHandler instanceof BeanMap) {
-                    ((BeanMap) beanHandler).set(property, value);
+                    return ((BeanMap) beanHandler).set(property, value);
                 } else {
                     beanHandler.put(property, value);
+                    return true;
                 }
             } catch (UnsupportedOperationException | IllegalStateException e) {
                 // 不可变Map
                 return false;
             }
         }
-        return true;
     }
 
     private static boolean isBasicType(Object value) {
