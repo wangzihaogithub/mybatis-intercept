@@ -1,5 +1,6 @@
 package com.github.mybatisintercept;
 
+import com.github.mybatisintercept.util.ASTDruidConditionUtil;
 import com.github.mybatisintercept.util.ASTDruidUtil;
 import org.junit.Assert;
 import org.junit.Test;
@@ -64,6 +65,45 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+        String self = ASTDruidUtil.addAndCondition(" SELECT\n" +
+                        "            a.id,\n" +
+                        "            a.NAME,\n" +
+                        "            a.short_name as shortName,\n" +
+                        "            a.pinyin pinyin,\n" +
+                        "            a.area_parent AS parentId,\n" +
+                        "            a.first_pinyin as firstPinyin,\n" +
+                        "            b.`name` as parentName,\n" +
+                        "            b.short_name as parentShortName\n" +
+                        "        FROM\n" +
+                        "            base_area a left join base_area b on a.area_parent = b.id\n" +
+                        "        WHERE\n" +
+                        "            a.type = 3\n" +
+                        "          and a.is_delete = 0\n" +
+                        "          and a.hot_flag = 1\n" +
+                        "        ORDER BY a.pinyin", "tenant_id = 2",
+                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL,
+                "mysql",
+                (s, t) -> {
+                    return t.equals("base_area");
+                });
+
+        Assert.assertEquals(" SELECT\n" +
+                "            a.id,\n" +
+                "            a.NAME,\n" +
+                "            a.short_name as shortName,\n" +
+                "            a.pinyin pinyin,\n" +
+                "            a.area_parent AS parentId,\n" +
+                "            a.first_pinyin as firstPinyin,\n" +
+                "            b.`name` as parentName,\n" +
+                "            b.short_name as parentShortName\n" +
+                "        FROM\n" +
+                "            base_area a left join base_area b on a.area_parent = b.id\n" +
+                "        WHERE\n" +
+                "            a.type = 3\n" +
+                "          and a.is_delete = 0\n" +
+                "          and a.hot_flag = 1\n" +
+                "        ORDER BY a.pinyin", self);
+
         String from = ASTDruidUtil.addAndCondition("SELECT\n" +
                 "\ta.id,\n" +
                 "\ta.oid,\n" +

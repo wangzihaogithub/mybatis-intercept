@@ -130,7 +130,13 @@ public class ASTDruidConditionUtil {
     }
 
     public static String getTableName(SQLTableSource tableSource) {
-        if (tableSource instanceof SQLExprTableSource) {
+        if (tableSource == null) {
+            // 这种sql => SELECT @rownum := 0, @rowtotal := NULL
+            return null;
+        } else if (tableSource instanceof SQLJoinTableSource) {
+            // join
+            return getTableName(((SQLJoinTableSource) tableSource).getLeft());
+        } else if (tableSource instanceof SQLExprTableSource) {
             SQLName name = ((SQLExprTableSource) tableSource).getName();
             return name != null ? SQLUtils.normalize(name.getSimpleName(), null) : null;
         } else {
@@ -139,7 +145,13 @@ public class ASTDruidConditionUtil {
     }
 
     public static String getTableSchema(SQLTableSource tableSource) {
-        if (tableSource instanceof SQLExprTableSource) {
+        if (tableSource == null) {
+            // 这种sql => SELECT @rownum := 0, @rowtotal := NULL
+            return null;
+        } else if (tableSource instanceof SQLJoinTableSource) {
+            // join
+            return getTableSchema(((SQLJoinTableSource) tableSource).getLeft());
+        } else if (tableSource instanceof SQLExprTableSource) {
             return SQLUtils.normalize(((SQLExprTableSource) tableSource).getSchema(), null);
         } else {
             return null;
