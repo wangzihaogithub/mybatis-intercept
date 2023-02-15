@@ -2,6 +2,7 @@ package com.github.mybatisintercept;
 
 import com.github.mybatisintercept.util.ASTDruidUtil;
 import com.github.mybatisintercept.util.MybatisUtil;
+import com.github.mybatisintercept.util.PlatformDependentUtil;
 import com.github.mybatisintercept.util.StaticMethodAccessor;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
@@ -30,13 +31,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
     private BiPredicate<String, String> skipPredicate = (schema, tableName) -> {
         return skipTableNames.contains(tableName);
     };
-
-    private void initIfNeed() {
-        // Spring bean 方式配置时，如果没有配置属性就不会执行下面的 setProperties 方法，就不会初始化 因此这里会出现 null 的情况
-        if (initFlag.compareAndSet(false, true)) {
-            setProperties(System.getProperties());
-        }
-    }
+    private Properties properties;
 
     public static InterceptContext getInterceptContext() {
         return StaticMethodAccessor.getContext(InterceptContext.class);
@@ -44,6 +39,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
 
     @Override
     public Object intercept(Invocation invocation) throws Throwable {
+        // Spring bean 方式配置时，如果没有配置属性就不会执行下面的 setProperties 方法，就不会初始化 因此这里会出现 null 的情况
         initIfNeed();
 
         InterceptContext interceptContext = new InterceptContext(invocation, this);
@@ -112,8 +108,22 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
 
     @Override
     public void setProperties(Properties properties) {
+        this.properties = properties;
+        if (PlatformDependentUtil.EXIST_SPRING_BOOT) {
+            PlatformDependentUtil.onSpringEnvironmentReady(this::initIfNeed);
+        }
+    }
+
+    public void initIfNeed() {
+        if (!initFlag.compareAndSet(false, true)) {
+            return;
+        }
+        Properties properties = this.properties;
         if (properties == null || properties.isEmpty()) {
             properties = System.getProperties();
+        }
+        if (PlatformDependentUtil.SPRING_ENVIRONMENT_READY) {
+            properties = PlatformDependentUtil.resolveSpringPlaceholders(properties, "InjectColumnValuesInsertSQLInterceptor.");
         }
         String valueProvider = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
         String dbType = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.dbType", "mysql");
