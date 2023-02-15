@@ -14,6 +14,7 @@ import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiPredicate;
+import java.util.stream.Collectors;
 
 /**
  * 自动给（insert语句, replace语句）加字段
@@ -138,7 +139,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             this.interceptPackageNames.addAll(Arrays.asList(interceptPackageNames.trim().split(",")));
         }
         if (skipTableNames.trim().length() > 0) {
-            this.skipTableNames.addAll(Arrays.asList(skipTableNames.trim().split(",")));
+            this.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
     }
 
