@@ -15,6 +15,7 @@ import org.apache.ibatis.session.RowBounds;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 /**
  * 给 mapper.xml 加全局内置属性（可以在 mapper.xml 里直接访问这些属性）
@@ -127,7 +128,7 @@ public class InjectMapperParametersInterceptor implements Interceptor {
         this.valueProvider = new StaticMethodAccessor<>(valueProvider);
         this.metaName = metaName;
         if (attrNames.trim().length() > 0) {
-            this.attrNames.addAll(Arrays.asList(attrNames.trim().split(",")));
+            this.attrNames.addAll(Arrays.stream(attrNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
     }
 

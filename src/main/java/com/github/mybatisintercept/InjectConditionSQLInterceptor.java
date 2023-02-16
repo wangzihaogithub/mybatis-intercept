@@ -168,7 +168,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         this.existInjectConditionStrategyEnum = ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.valueOf(existInjectConditionStrategyEnum);
         this.conditionExpression = SQL.compile(conditionExpression, Collections.emptyMap());
         if (interceptPackageNames.trim().length() > 0) {
-            this.interceptPackageNames.addAll(Arrays.asList(interceptPackageNames.trim().split(",")));
+            this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
         if (skipTableNames.trim().length() > 0) {
             this.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));

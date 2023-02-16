@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.github.wangzihaogithub</groupId>
     <artifactId>mybatis-intercept</artifactId>
-    <version>1.0.3-SNAPSHOT</version>
+    <version>1.0.3</version>
     <name>mybatis-intercept</name>
     <description>Mybatis intercept project</description>
     <url>https://github.com/wangzihaogithub/mybatis-intercept.git</url>

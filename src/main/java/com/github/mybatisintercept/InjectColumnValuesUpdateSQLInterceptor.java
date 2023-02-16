@@ -107,7 +107,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         this.dbType = dbType;
         this.columnMappings = ColumnMapping.parse(columnMappings);
         if (interceptPackageNames.trim().length() > 0) {
-            this.interceptPackageNames.addAll(Arrays.asList(interceptPackageNames.trim().split(",")));
+            this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
         if (skipTableNames.trim().length() > 0) {
             this.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
@@ -196,12 +196,16 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         public static Set<ColumnMapping> parse(String str) {
             Set<ColumnMapping> list = new LinkedHashSet<>();
             for (String s : str.split(",")) {
+                s = s.trim();
+                if (s.isEmpty()) {
+                    continue;
+                }
                 ColumnMapping bean;
                 String[] split = s.split("=", 2);
                 if (split.length == 1) {
-                    bean = new ColumnMapping(split[0], split[0]);
+                    bean = new ColumnMapping(split[0].trim(), split[0].trim());
                 } else {
-                    bean = new ColumnMapping(split[0], split[1]);
+                    bean = new ColumnMapping(split[0].trim(), split[1].trim());
                 }
                 list.add(bean);
             }

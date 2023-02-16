@@ -37,15 +37,15 @@ public class ASTDruidConditionUtil {
      */
     public enum ExistInjectConditionStrategyEnum {
         /**
-         * 任意表存在条件, 就跳过整个SQL
+         * 任意表里存在条件, 就跳过整个SQL
          */
         ANY_TABLE_MATCH_THEN_SKIP_SQL,
         /**
-         * 仅符合规则的表存在条件, 就跳过整个SQL
+         * 没被配置文件排除的表里，如果存在条件, 就跳过整个SQL
          */
         RULE_TABLE_MATCH_THEN_SKIP_SQL,
         /**
-         * 仅符合规则的表存在条件, 就跳过当前子条件项
+         * 没被配置文件排除的表里，如果存在条件, 就跳过当前子条件项
          */
         RULE_TABLE_MATCH_THEN_SKIP_ITEM,
         /**
