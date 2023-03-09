@@ -12,7 +12,6 @@ import org.apache.ibatis.plugin.*;
 import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.RowBounds;
 
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -132,7 +131,7 @@ public class InjectMapperParametersInterceptor implements Interceptor {
         }
     }
 
-    public static class InterceptContext {
+    public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectMapperParametersInterceptor> {
         private final Invocation invocation;
         private final InjectMapperParametersInterceptor interceptor;
 
@@ -141,24 +140,15 @@ public class InjectMapperParametersInterceptor implements Interceptor {
             this.interceptor = interceptor;
         }
 
+        @Override
         public InjectMapperParametersInterceptor getInterceptor() {
             return interceptor;
         }
 
+        @Override
         public Invocation getInvocation() {
             return invocation;
         }
 
-        public String getBoundSqlString() {
-            return MybatisUtil.getBoundSqlString(invocation);
-        }
-
-        public Method getMapperMethod() {
-            return MybatisUtil.getMapperMethod(invocation);
-        }
-
-        public Class<?> getMapperClass() {
-            return MybatisUtil.getMapperClass(MybatisUtil.getMappedStatement(invocation));
-        }
     }
 }

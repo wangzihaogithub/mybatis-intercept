@@ -151,12 +151,7 @@ public class MybatisUtil {
         Object parameter = getParameter(invocation);
         if (parameter == null) {
             // skip null
-        } else if (parameter.getClass().isPrimitive()
-                || parameter instanceof Number
-                || parameter instanceof CharSequence
-                || parameter instanceof Date
-                || parameter instanceof TemporalAccessor
-                || parameter instanceof Enum) {
+        } else if (isBasicType(parameter)) {
             // skip 基本类型
         } else if (parameter instanceof Collection) {
             // skip Collection

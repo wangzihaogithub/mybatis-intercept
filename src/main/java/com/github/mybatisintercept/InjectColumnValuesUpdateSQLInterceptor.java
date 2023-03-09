@@ -9,7 +9,6 @@ import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.plugin.*;
 
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiPredicate;
@@ -213,7 +212,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         }
     }
 
-    public static class InterceptContext {
+    public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectColumnValuesUpdateSQLInterceptor> {
         private final Invocation invocation;
         private final InjectColumnValuesUpdateSQLInterceptor interceptor;
 
@@ -222,24 +221,14 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
             this.interceptor = interceptor;
         }
 
+        @Override
         public InjectColumnValuesUpdateSQLInterceptor getInterceptor() {
             return interceptor;
         }
 
+        @Override
         public Invocation getInvocation() {
             return invocation;
-        }
-
-        public String getBoundSqlString() {
-            return MybatisUtil.getBoundSqlString(invocation);
-        }
-
-        public Method getMapperMethod() {
-            return MybatisUtil.getMapperMethod(invocation);
-        }
-
-        public Class<?> getMapperClass() {
-            return MybatisUtil.getMapperClass(MybatisUtil.getMappedStatement(invocation));
         }
     }
 }

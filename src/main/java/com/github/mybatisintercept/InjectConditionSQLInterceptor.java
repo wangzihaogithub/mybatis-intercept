@@ -175,7 +175,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
     }
 
-    public static class InterceptContext {
+    public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectConditionSQLInterceptor> {
         private final Invocation invocation;
         private final InjectConditionSQLInterceptor interceptor;
 
@@ -184,25 +184,16 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             this.interceptor = interceptor;
         }
 
+        @Override
         public InjectConditionSQLInterceptor getInterceptor() {
             return interceptor;
         }
 
+        @Override
         public Invocation getInvocation() {
             return invocation;
         }
 
-        public String getBoundSqlString() {
-            return MybatisUtil.getBoundSqlString(invocation);
-        }
-
-        public Method getMapperMethod() {
-            return MybatisUtil.getMapperMethod(invocation);
-        }
-
-        public Class<?> getMapperClass() {
-            return MybatisUtil.getMapperClass(MybatisUtil.getMappedStatement(invocation));
-        }
     }
 
 }
