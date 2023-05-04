@@ -325,6 +325,13 @@ public class ASTDruidConditionUtil {
             private boolean update;
             private boolean delete;
 
+            private boolean isSelect() {
+                if (select) {
+                    return true;
+                }
+                return !update && !delete;
+            }
+
             @Override
             public boolean visit(SQLSelectQueryBlock statement) {
                 select = true;
@@ -355,7 +362,7 @@ public class ASTDruidConditionUtil {
 
             @Override
             public boolean visit(SQLJoinTableSource statement) {
-                if (!select) {
+                if (!isSelect()) {
                     return true;
                 }
                 SQLTableSource from = statement.getRight();

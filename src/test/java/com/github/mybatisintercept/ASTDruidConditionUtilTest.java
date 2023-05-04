@@ -65,6 +65,129 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+        String bug1 = ASTDruidUtil.addAndCondition("SELECT\n" +
+                        "\tbp.id AS positionId,\n" +
+                        "\tbp.NAME AS positionName,\n" +
+                        "\t( SELECT GROUP_CONCAT( dar.role ) FROM data_achieve_user_role dar WHERE dar.data_achieve_id = a.id AND dar.delete_flag = 0 AND dar.tenant_id = 1 ) AS roleCode,\n" +
+                        "IF\n" +
+                        "\t( pi.source = 'gulu', bc.brand, n.NAME ) AS baseNodeName,\n" +
+                        "\tpi.id AS id,\n" +
+                        "\tDATE_FORMAT( pipeext.upload_time, '%Y-%m-%d' ) AS uploadTime,\n" +
+                        "\tDATE_FORMAT( pi.create_time, '%Y-%m-%d' ) AS createTime,\n" +
+                        "\tDATE_FORMAT( pi.invoice_time, '%Y-%m-%d' ) AS invoiceTime,\n" +
+                        "\tDATE_FORMAT( pi.send_time, '%Y-%m-%d' ) AS sendTime,\n" +
+                        "\tDATE_FORMAT( pi.pay_time, '%Y-%m-%d' ) AS payTime,\n" +
+                        "\tDATE_FORMAT( pi.sign_time, '%Y-%m-%d' ) AS signTime,\n" +
+                        "\tDATE_FORMAT( pi.entry_time, '%Y-%m-%d' ) AS entryTime,\n" +
+                        "\tpi.STATUS AS STATUS,\n" +
+                        "\tbc.NAME AS corpName,\n" +
+                        "\tbc.brand AS brand,\n" +
+                        "\tt.talent_name AS talentName,\n" +
+                        "\tt.id AS talentId,\n" +
+                        "\ta.money AS money,\n" +
+                        "\ta.after_tax_money AS afterTaxMoney,\n" +
+                        "\tp1.name_en AS userName,\n" +
+                        "\ta.p_user_id AS userId,\n" +
+                        "\tbc.id AS corpId,\n" +
+                        "\tpi.source AS source \n" +
+                        "FROM\n" +
+                        "\tdata_achieve a\n" +
+                        "\tLEFT JOIN pipeline_invoice pi ON a.invoice_id = pi.id\n" +
+                        "\tLEFT JOIN p_user p1 ON a.p_user_id = p1.id\n" +
+                        "\tLEFT JOIN biz_corp bc ON pi.biz_corp_id = bc.id\n" +
+                        "\tLEFT JOIN biz_position bp ON pi.biz_position_id = bp.id\n" +
+                        "\tLEFT JOIN base_node n ON bp.base_node_id = n.id\n" +
+                        "\tLEFT JOIN talent t ON pi.talent_id = t.id\n" +
+                        "\tLEFT JOIN pipeline_ext pipeext ON pipeext.pipeline_id = pi.pipeline_id \n" +
+                        "WHERE\n" +
+                        "\t(\n" +
+                        "\t\ta.delete_flag = 0 \n" +
+                        "\t\tAND pi.delete_flag = 0 \n" +
+                        "\t\tAND a.money != 0 \n" +
+                        "\t\tAND a.dept_id IN (123) \n" +
+                        "\t\tAND pi.STATUS != 270 \n" +
+                        "\t\tAND (\n" +
+                        "\t\t\tEXISTS (\n" +
+                        "\t\t\tSELECT\n" +
+                        "\t\t\t\t* \n" +
+                        "\t\t\tFROM\n" +
+                        "\t\t\t\tpipeline_ext pe \n" +
+                        "\t\t\tWHERE\n" +
+                        "\t\t\t\tpe.pipeline_id = pi.pipeline_id \n" +
+                        "\t\t\t\tAND pe.first_interview_time <= ? AND pe.first_interview_time >= ? \n" +
+                        "\t\t\t\tAND pe.tenant_id = 1 \n" +
+                        "\t\t\t) \n" +
+                        "\t\t\tAND pi.payment_type = 2 \n" +
+                        "\t\t) \n" +
+                        "\tOR ( pi.sign_time <= ? AND pi.sign_time >= ? AND pi.payment_type = 1 )\n" +
+                        "\t) \n" +
+                        "\tAND a.tenant_id = 1 \n" +
+                        "ORDER BY\n" +
+                        "\tpi.create_time DESC \n" +
+                        "\tLIMIT ?", "tenant_id = 2",
+                "mysql", ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM);
+
+        Assert.assertEquals("SELECT bp.id AS positionId, bp.NAME AS positionName\n" +
+                "\t, (\n" +
+                "\t\tSELECT GROUP_CONCAT(dar.role)\n" +
+                "\t\tFROM data_achieve_user_role dar\n" +
+                "\t\tWHERE dar.data_achieve_id = a.id\n" +
+                "\t\t\tAND dar.delete_flag = 0\n" +
+                "\t\t\tAND dar.tenant_id = 1\n" +
+                "\t) AS roleCode\n" +
+                "\t, IF(pi.source = 'gulu', bc.brand, n.NAME) AS baseNodeName\n" +
+                "\t, pi.id AS id, DATE_FORMAT(pipeext.upload_time, '%Y-%m-%d') AS uploadTime\n" +
+                "\t, DATE_FORMAT(pi.create_time, '%Y-%m-%d') AS createTime\n" +
+                "\t, DATE_FORMAT(pi.invoice_time, '%Y-%m-%d') AS invoiceTime\n" +
+                "\t, DATE_FORMAT(pi.send_time, '%Y-%m-%d') AS sendTime\n" +
+                "\t, DATE_FORMAT(pi.pay_time, '%Y-%m-%d') AS payTime\n" +
+                "\t, DATE_FORMAT(pi.sign_time, '%Y-%m-%d') AS signTime\n" +
+                "\t, DATE_FORMAT(pi.entry_time, '%Y-%m-%d') AS entryTime, pi.STATUS AS STATUS\n" +
+                "\t, bc.NAME AS corpName, bc.brand AS brand, t.talent_name AS talentName, t.id AS talentId, a.money AS money\n" +
+                "\t, a.after_tax_money AS afterTaxMoney, p1.name_en AS userName, a.p_user_id AS userId, bc.id AS corpId, pi.source AS source\n" +
+                "FROM data_achieve a\n" +
+                "\tLEFT JOIN pipeline_invoice pi\n" +
+                "\tON a.invoice_id = pi.id\n" +
+                "\t\tAND pi.tenant_id = 2\n" +
+                "\tLEFT JOIN p_user p1\n" +
+                "\tON a.p_user_id = p1.id\n" +
+                "\t\tAND p1.tenant_id = 2\n" +
+                "\tLEFT JOIN biz_corp bc\n" +
+                "\tON pi.biz_corp_id = bc.id\n" +
+                "\t\tAND bc.tenant_id = 2\n" +
+                "\tLEFT JOIN biz_position bp\n" +
+                "\tON pi.biz_position_id = bp.id\n" +
+                "\t\tAND bp.tenant_id = 2\n" +
+                "\tLEFT JOIN base_node n\n" +
+                "\tON bp.base_node_id = n.id\n" +
+                "\t\tAND n.tenant_id = 2\n" +
+                "\tLEFT JOIN talent t\n" +
+                "\tON pi.talent_id = t.id\n" +
+                "\t\tAND t.tenant_id = 2\n" +
+                "\tLEFT JOIN pipeline_ext pipeext\n" +
+                "\tON pipeext.pipeline_id = pi.pipeline_id\n" +
+                "\t\tAND pipeext.tenant_id = 2\n" +
+                "WHERE (a.delete_flag = 0\n" +
+                "\t\tAND pi.delete_flag = 0\n" +
+                "\t\tAND a.money != 0\n" +
+                "\t\tAND a.dept_id IN (123)\n" +
+                "\t\tAND pi.STATUS != 270\n" +
+                "\t\tAND (EXISTS (\n" +
+                "\t\t\t\tSELECT *\n" +
+                "\t\t\t\tFROM pipeline_ext pe\n" +
+                "\t\t\t\tWHERE pe.pipeline_id = pi.pipeline_id\n" +
+                "\t\t\t\t\tAND pe.first_interview_time <= ?\n" +
+                "\t\t\t\t\tAND pe.first_interview_time >= ?\n" +
+                "\t\t\t\t\tAND pe.tenant_id = 1\n" +
+                "\t\t\t)\n" +
+                "\t\t\tAND pi.payment_type = 2)\n" +
+                "\t\tOR (pi.sign_time <= ?\n" +
+                "\t\t\tAND pi.sign_time >= ?\n" +
+                "\t\t\tAND pi.payment_type = 1))\n" +
+                "\tAND a.tenant_id = 1\n" +
+                "ORDER BY pi.create_time DESC\n" +
+                "LIMIT ?", bug1);
+
         String self = ASTDruidUtil.addAndCondition(" SELECT\n" +
                         "            a.id,\n" +
                         "            a.NAME,\n" +

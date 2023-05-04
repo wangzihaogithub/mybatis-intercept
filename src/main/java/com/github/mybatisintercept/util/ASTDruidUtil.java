@@ -13,6 +13,11 @@ import java.util.function.BiPredicate;
 
 public class ASTDruidUtil {
 
+    public static String addAndCondition(String sql, String injectCondition, String dbType, ASTDruidConditionUtil.ExistInjectConditionStrategyEnum strategyEnum) {
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
+                strategyEnum, dbType, null);
+    }
+
     public static String addAndCondition(String sql, String injectCondition, String dbType) {
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
                 ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL, dbType, null);
