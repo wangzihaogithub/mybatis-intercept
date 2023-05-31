@@ -1013,6 +1013,9 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void update() {
+        String updateexist = ASTDruidUtil.addAndCondition(" UPDATE user  SET `status` = 2 WHERE id =1 and tenant_id = 1", "tenant_id = 2", "mysql");
+        Assert.assertEquals(" UPDATE user  SET `status` = 2 WHERE id =1 and tenant_id = 1", updateexist);
+
         String join = ASTDruidUtil.addAndCondition(" update pipeline\n" +
                 "      left join (select interview_time, pipeline_id from `pipeline_interview`\n" +
                 "      where delete_flag = 0 and cancel_interview_flag = 0 and pipeline_id = 1\n" +

@@ -501,20 +501,31 @@ public class ASTDruidConditionUtil {
 
             if (item instanceof SQLExpr) {
                 SQLExpr itemExpr = (SQLExpr) item;
+                String itemColumnName;
+                String itemColumnOwnerName;
                 if (item instanceof SQLPropertyExpr) {
                     SQLPropertyExpr itemColumn = (SQLPropertyExpr) item;
-                    String itemColumnOwnernName = itemColumn.getOwnernName();
-                    String itemColumnName = itemColumn.getName();
-                    if (itemColumnOwnernName != null && !itemColumnOwnernName.equalsIgnoreCase(aliasOrTableName)) {
-                        continue;
-                    }
+                    itemColumnOwnerName = itemColumn.getOwnernName();
+                    itemColumnName = itemColumn.getName();
+                } else if (item instanceof SQLIdentifierExpr) {
+                    itemColumnName = ((SQLIdentifierExpr) item).getName();
+                    itemColumnOwnerName = null;
+                } else {
+                    itemColumnName = null;
+                    itemColumnOwnerName = null;
+                }
 
+                if (itemColumnOwnerName != null && !itemColumnOwnerName.equalsIgnoreCase(aliasOrTableName)) {
+                    continue;
+                }
+                if (itemColumnName != null) {
+                    String normalizeItemColumnName = SQLUtils.normalize(itemColumnName);
                     int i = 0;
                     for (SQLName injectConditionColumn : injectConditionColumnList) {
                         if (exist.get(i)) {
                             continue;
                         }
-                        if (injectConditionColumn.getSimpleName().equalsIgnoreCase(itemColumnName)) {
+                        if (injectConditionColumn.getSimpleName().equalsIgnoreCase(normalizeItemColumnName)) {
                             exist.set(i);
                         }
                         if (exist.length() == injectConditionColumnSize) {
