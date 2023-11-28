@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
                 RowBounds.class}),
         @Signature(type = Executor.class, method = "update", args = {MappedStatement.class, Object.class})})
 public class InjectConditionSQLInterceptor implements Interceptor {
+    private static final List<InjectConditionSQLInterceptor> INSTANCE_LIST = Collections.synchronizedList(new LinkedList<>());
     private final Set<String> interceptPackageNames = new LinkedHashSet<>();
     private final Set<String> skipTableNames = new LinkedHashSet<>();
     private final Map<String, List<String>> tableUniqueKeyColumnMap = new HashMap<>();
@@ -46,8 +47,16 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     private Predicate<SQLCondition> uniqueKeyPredicate = sqlCondition -> sqlCondition.existUniqueKeyColumn(tableUniqueKeyColumnMap);
     private Properties properties;
 
+    public InjectConditionSQLInterceptor() {
+        INSTANCE_LIST.add(this);
+    }
+
     public static InterceptContext getInterceptContext() {
         return StaticMethodAccessor.getContext(InterceptContext.class);
+    }
+
+    public static List<InjectConditionSQLInterceptor> getInstanceList() {
+        return Collections.unmodifiableList(INSTANCE_LIST);
     }
 
     @Override
@@ -180,8 +189,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         String interceptPackageNames = properties.getProperty("InjectConditionSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectConditionSQLInterceptor.skipTableNames", "");
 
-        boolean enabledUniqueKeyCatalog = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKeyCatalog", "true"));
-        if (enabledUniqueKeyCatalog) {
+        boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
+        if (enabledUniqueKey) {
             String autoUniqueKeyCatalog = properties.getProperty("InjectConditionSQLInterceptor.autoUniqueKeyCatalog", "");
             if (PlatformDependentUtil.EXIST_SPRING_BOOT && autoUniqueKeyCatalog.trim().length() > 0) {
                 if ("mysql".equalsIgnoreCase(dbType) || "mariadb".equalsIgnoreCase(dbType)) {
@@ -229,7 +238,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                         if (selectCatalog == null || selectCatalog.isEmpty() || Objects.equals(selectCatalog, catalog)) {
                             map.putAll(selectTableUniqueKeyColumnMap(dataSource, catalog));
                         }
-                    } catch (SQLException ignored) {
+                    } catch (Exception ignored) {
                     }
                 }
             }
