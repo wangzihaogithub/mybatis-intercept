@@ -35,7 +35,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     private static final List<InjectConditionSQLInterceptor> INSTANCE_LIST = Collections.synchronizedList(new LinkedList<>());
     private final Set<String> interceptPackageNames = new LinkedHashSet<>();
     private final Set<String> skipTableNames = new LinkedHashSet<>();
-    private final Map<String, List<String>> tableUniqueKeyColumnMap = new HashMap<>();
+    private final Map<String, List<String>> tableUniqueKeyColumnMap = Collections.synchronizedMap(new HashMap<>());
     private final AtomicBoolean initFlag = new AtomicBoolean();
     private String dbType;
     private ASTDruidConditionUtil.ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum;
@@ -191,10 +191,9 @@ public class InjectConditionSQLInterceptor implements Interceptor {
 
         boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
         if (enabledUniqueKey) {
-            String autoUniqueKeyCatalog = properties.getProperty("InjectConditionSQLInterceptor.autoUniqueKeyCatalog", "");
-            if (PlatformDependentUtil.EXIST_SPRING_BOOT && autoUniqueKeyCatalog.trim().length() > 0) {
+            if (PlatformDependentUtil.EXIST_SPRING_BOOT) {
                 if ("mysql".equalsIgnoreCase(dbType) || "mariadb".equalsIgnoreCase(dbType)) {
-                    PlatformDependentUtil.onSpringDatasourceReady(new MysqlDataSourcesConsumer(autoUniqueKeyCatalog, tableUniqueKeyColumnMap));
+                    PlatformDependentUtil.onSpringDatasourceReady(new MysqlDataSourcesConsumer(tableUniqueKeyColumnMap));
                 }
             }
             // uniqueKey解析格式：table1=col1,col2;table2=col3;table3=col5,col6
@@ -215,61 +214,84 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     }
 
     static class MysqlDataSourcesConsumer implements Consumer<Collection<DataSource>> {
-        private final String autoUniqueKeyCatalog;
         private final Map<String, List<String>> tableUniqueKeyColumnMap;
 
-        private MysqlDataSourcesConsumer(String autoUniqueKeyCatalog, Map<String, List<String>> tableUniqueKeyColumnMap) {
-            this.autoUniqueKeyCatalog = autoUniqueKeyCatalog;
+        private MysqlDataSourcesConsumer(Map<String, List<String>> tableUniqueKeyColumnMap) {
             this.tableUniqueKeyColumnMap = tableUniqueKeyColumnMap;
         }
 
         @Override
         public void accept(Collection<DataSource> dataSources) {
-            String[] autoUniqueKeyCatalogList = autoUniqueKeyCatalog.trim().split(",");
             Map<String, List<String>> map = new LinkedHashMap<>();
-            for (String catalog : autoUniqueKeyCatalogList) {
-                if (catalog.trim().isEmpty()) {
-                    continue;
-                }
-                catalog = catalog.trim();
-                for (DataSource dataSource : dataSources) {
-                    try {
-                        String selectCatalog = getCatalog(dataSource);
-                        if (selectCatalog == null || selectCatalog.isEmpty() || Objects.equals(selectCatalog, catalog)) {
-                            map.putAll(selectTableUniqueKeyColumnMap(dataSource, catalog));
-                        }
-                    } catch (Exception ignored) {
-                    }
+            for (DataSource dataSource : dataSources) {
+                try {
+                    String selectCatalog = getCatalog(dataSource);
+                    Map<String, List<String>> rowMap = selectTableUniqueKeyColumnMapByInfo(dataSource, selectCatalog);
+                    map.putAll(rowMap);
+                } catch (Exception ignored) {
+
                 }
             }
             tableUniqueKeyColumnMap.putAll(map);
         }
 
-        private String getCatalog(DataSource dataSource) throws SQLException {
+        private String getCatalog(DataSource dataSource) {
             try (Connection connection = dataSource.getConnection()) {
                 return connection.getCatalog();
+            } catch (Exception e) {
+                return null;
             }
         }
 
-        private Map<String, List<String>> selectTableUniqueKeyColumnMap(DataSource dataSource, String catalog) throws SQLException {
+        private Map<String, List<String>> selectTableUniqueKeyColumnMapByInfo(DataSource dataSource, String catalog) {
             Map<String, List<String>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
+            Map<List<String>, List<String>> cache = new HashMap<>();
+            boolean isCatalog = catalog != null && !catalog.isEmpty();
+            String sql = isCatalog ? "SELECT TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = ? GROUP BY TABLE_NAME"
+                    : "SELECT TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' GROUP BY TABLE_NAME";
             try (Connection connection = dataSource.getConnection();
-                 Statement statement = connection.createStatement();
-                 ResultSet rs = statement.executeQuery("SHOW TABLE STATUS FROM " + catalog)) {
-                List<String> tableNameList = new ArrayList<>();
-                while (rs.next()) {
-                    tableNameList.add(rs.getString(1));
+                 PreparedStatement statement = connection.prepareStatement(sql)) {
+                if (isCatalog) {
+                    statement.setObject(1, catalog);
                 }
-
-                DatabaseMetaData metaData = rs.getStatement().getConnection().getMetaData();
-                for (String table : tableNameList) {
-                    List<String> primaryKeyList = new ArrayList<>();
-                    try (ResultSet primaryKeys = metaData.getPrimaryKeys(catalog, catalog, table)) {
-                        while (primaryKeys.next()) {
-                            primaryKeyList.add(primaryKeys.getString("COLUMN_NAME"));
-                        }
+                try (ResultSet rs = statement.executeQuery()) {
+                    while (rs.next()) {
+                        String tableName = rs.getString(1);
+                        String columnName = rs.getString(2);
+                        List<String> primaryKeyList = Arrays.asList(columnName.split(","));
+                        tableUniqueKeyColumnMap.put(tableName, cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList));
                     }
-                    tableUniqueKeyColumnMap.put(table, primaryKeyList);
+                }
+                return tableUniqueKeyColumnMap;
+            } catch (Exception ignored) {
+                // 1044 - Access denied for user
+                return selectTableUniqueKeyColumnMapByShow(dataSource, catalog);
+            }
+        }
+
+        private Map<String, List<String>> selectTableUniqueKeyColumnMapByShow(DataSource dataSource, String catalog) {
+            Map<String, List<String>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
+            Map<List<String>, List<String>> cache = new HashMap<>();
+            boolean isCatalog = catalog != null && !catalog.isEmpty();
+            String sql = isCatalog ? "SHOW TABLE STATUS FROM " + catalog : "SHOW TABLE STATUS";
+            try (Connection connection = dataSource.getConnection();
+                 Statement statement = connection.createStatement()) {
+                try (ResultSet rs = statement.executeQuery(sql)) {
+                    List<String> tableNameList = new ArrayList<>();
+                    while (rs.next()) {
+                        tableNameList.add(rs.getString(1));
+                    }
+                    DatabaseMetaData metaData = rs.getStatement().getConnection().getMetaData();
+                    for (String table : tableNameList) {
+                        List<String> primaryKeyList = new ArrayList<>();
+                        String catalogget = "".equals(catalog) ? null : catalog;
+                        try (ResultSet primaryKeys = metaData.getPrimaryKeys(catalogget, catalogget, table)) {
+                            while (primaryKeys.next()) {
+                                primaryKeyList.add(primaryKeys.getString("COLUMN_NAME"));
+                            }
+                        }
+                        tableUniqueKeyColumnMap.put(table, cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList));
+                    }
                 }
             } catch (Exception ignored) {
                 // 1044 - Access denied for user
