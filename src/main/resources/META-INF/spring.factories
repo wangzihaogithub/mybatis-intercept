@@ -4,5 +4,5 @@ com.github.mybatisintercept.springboot.MybatisInterceptEnvironmentPostProcessor
 
 # ApplicationRunner
 org.springframework.boot.ApplicationRunner=\
-com.github.mybatisintercept.springboot.MybatisDatasourceApplicationRunner
+com.github.mybatisintercept.springboot.MybatisInterceptDatasourceApplicationRunner
 

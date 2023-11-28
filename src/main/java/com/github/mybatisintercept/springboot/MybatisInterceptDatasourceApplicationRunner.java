@@ -10,7 +10,7 @@ import javax.sql.DataSource;
 import java.util.Collection;
 
 @Component
-public class MybatisDatasourceApplicationRunner implements ApplicationRunner {
+public class MybatisInterceptDatasourceApplicationRunner implements ApplicationRunner {
     @Autowired(required = false)
     private Collection<DataSource> dataSources;
 
