@@ -1,3 +1,8 @@
 # Environment Post Processors
 org.springframework.boot.env.EnvironmentPostProcessor=\
 com.github.mybatisintercept.springboot.MybatisInterceptEnvironmentPostProcessor
+
+# ApplicationRunner
+org.springframework.boot.ApplicationRunner=\
+com.github.mybatisintercept.springboot.MybatisDatasourceApplicationRunner
+
