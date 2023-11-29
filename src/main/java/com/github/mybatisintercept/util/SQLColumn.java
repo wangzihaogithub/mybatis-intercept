@@ -96,7 +96,7 @@ public class SQLColumn implements Cloneable {
         return "(" + leftToString() + " = " + rightToString() + ")";
     }
 
-    public String leftToString() {
+    private String leftToString() {
         if (leftColumnValue == null) {
             return leftTableName + " as " + leftTableAlias + '.' + leftColumnName;
         } else {
@@ -104,7 +104,7 @@ public class SQLColumn implements Cloneable {
         }
     }
 
-    public String rightToString() {
+    private String rightToString() {
         if (rightColumnValue == null) {
             return rightTableName + " as " + rightTableAlias + '.' + rightColumnName;
         } else {
