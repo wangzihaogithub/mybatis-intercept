@@ -2,13 +2,18 @@ package com.github.mybatisintercept.util;
 
 import com.github.mybatisintercept.springboot.MybatisInterceptEnvironmentPostProcessor;
 
+import javax.sql.DataSource;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Properties;
+import java.util.function.Consumer;
 
 public class PlatformDependentUtil {
     public static boolean SPRING_ENVIRONMENT_READY;
+    private static Collection<DataSource> SPRING_DATASOURCE_READY;
     public static final boolean EXIST_SPRING_BOOT;
     private static final ArrayList<Runnable> onSpringEnvironmentReadyList = new ArrayList<>();
+    private static final ArrayList<Consumer<Collection<DataSource>>> onSpringDatasourceReadyList = new ArrayList<>();
 
     static {
         boolean existSpringBoot;
@@ -22,6 +27,24 @@ public class PlatformDependentUtil {
         EXIST_SPRING_BOOT = existSpringBoot;
     }
 
+    public static void onSpringDatasourceReady(Consumer<Collection<DataSource>> consumer) {
+        if (SPRING_DATASOURCE_READY != null) {
+            consumer.accept(SPRING_DATASOURCE_READY);
+        } else {
+            onSpringDatasourceReadyList.add(consumer);
+        }
+    }
+
+    public static void onSpringDatasourceReady(Collection<DataSource> dataSources) {
+        SPRING_DATASOURCE_READY = dataSources;
+        ArrayList<Consumer<Collection<DataSource>>> consumers = new ArrayList<>(onSpringDatasourceReadyList);
+        onSpringDatasourceReadyList.clear();
+        onSpringDatasourceReadyList.trimToSize();
+        for (Consumer<Collection<DataSource>> runnable : consumers) {
+            runnable.accept(dataSources);
+        }
+    }
+
     public static void onSpringEnvironmentReady(Runnable runnable) {
         if (SPRING_ENVIRONMENT_READY) {
             runnable.run();
@@ -31,11 +54,12 @@ public class PlatformDependentUtil {
     }
 
     public static void onSpringEnvironmentReady() {
-        for (Runnable runnable : onSpringEnvironmentReadyList) {
-            runnable.run();
-        }
+        ArrayList<Runnable> list = new ArrayList<>(onSpringEnvironmentReadyList);
         onSpringEnvironmentReadyList.clear();
         onSpringEnvironmentReadyList.trimToSize();
+        for (Runnable runnable : list) {
+            runnable.run();
+        }
     }
 
     public static Properties resolveSpringPlaceholders(Properties properties, String prefix) {

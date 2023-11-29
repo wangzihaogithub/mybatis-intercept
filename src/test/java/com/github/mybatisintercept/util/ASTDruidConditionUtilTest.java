@@ -1,7 +1,5 @@
-package com.github.mybatisintercept;
+package com.github.mybatisintercept.util;
 
-import com.github.mybatisintercept.util.ASTDruidConditionUtil;
-import com.github.mybatisintercept.util.ASTDruidUtil;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -20,8 +18,8 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void mysql8Cte() {
-        String cte1 = ASTDruidUtil.addAndCondition("with user_cte(dept_id,name) as (select dept_id,name from user ) SELECT t1.id, t2.* " +
-                "from dept t1 left join user_cte t2 on t1.id = t2.dept_id", "tenant_id = 2", "mysql");
+        String cte1 = ASTDruidTestUtil.addAndCondition("with user_cte(dept_id,name) as (select dept_id,name from user ) SELECT t1.id, t2.* " +
+                "from dept t1 left join user_cte t2 on t1.id = t2.dept_id", "tenant_id = 2");
         Assert.assertEquals("WITH user_cte (dept_id, name) AS (\n" +
                 "\t\tSELECT dept_id, name\n" +
                 "\t\tFROM user\n" +
@@ -34,13 +32,13 @@ public class ASTDruidConditionUtilTest {
                 "\t\tAND t2.tenant_id = 2\n" +
                 "WHERE t1.tenant_id = 2", cte1);
 
-        String cte2 = ASTDruidUtil.addAndCondition(
+        String cte2 = ASTDruidTestUtil.addAndCondition(
                 "WITH user_cte (dept_id, name) AS (SELECT dept_id, name FROM user)," +
                         " user_cte2 (dept_id, name) AS (SELECT dept_id, name FROM user) " +
                         "SELECT t1.id, t2.* " +
                         "FROM dept t1 " +
                         "LEFT JOIN user_cte t2 ON t1.id = t2.dept_id " +
-                        "LEFT JOIN user_cte2 t3 ON t1.id = t3.dept_id", "tenant_id = 2", "mysql");
+                        "LEFT JOIN user_cte2 t3 ON t1.id = t3.dept_id", "tenant_id = 2");
         Assert.assertEquals("WITH user_cte (dept_id, name) AS (\n" +
                 "\t\tSELECT dept_id, name\n" +
                 "\t\tFROM user\n" +
@@ -65,7 +63,7 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
-        String bug1 = ASTDruidUtil.addAndCondition("SELECT\n" +
+        String bug1 = ASTDruidTestUtil.addAndCondition("SELECT\n" +
                         "\tbp.id AS positionId,\n" +
                         "\tbp.NAME AS positionName,\n" +
                         "\t( SELECT GROUP_CONCAT( dar.role ) FROM data_achieve_user_role dar WHERE dar.data_achieve_id = a.id AND dar.delete_flag = 0 AND dar.tenant_id = 1 ) AS roleCode,\n" +
@@ -125,7 +123,7 @@ public class ASTDruidConditionUtilTest {
                         "ORDER BY\n" +
                         "\tpi.create_time DESC \n" +
                         "\tLIMIT ?", "tenant_id = 2",
-                "mysql", ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM);
+                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM);
 
         Assert.assertEquals("SELECT bp.id AS positionId, bp.NAME AS positionName\n" +
                 "\t, (\n" +
@@ -188,7 +186,7 @@ public class ASTDruidConditionUtilTest {
                 "ORDER BY pi.create_time DESC\n" +
                 "LIMIT ?", bug1);
 
-        String self = ASTDruidUtil.addAndCondition(" SELECT\n" +
+        String self = ASTDruidTestUtil.addAndCondition(" SELECT\n" +
                         "            a.id,\n" +
                         "            a.NAME,\n" +
                         "            a.short_name as shortName,\n" +
@@ -227,7 +225,7 @@ public class ASTDruidConditionUtilTest {
                 "          and a.hot_flag = 1\n" +
                 "        ORDER BY a.pinyin", self);
 
-        String from = ASTDruidUtil.addAndCondition("SELECT\n" +
+        String from = ASTDruidTestUtil.addAndCondition("SELECT\n" +
                 "\ta.id,\n" +
                 "\ta.oid,\n" +
                 "\ta.rid,\n" +
@@ -243,7 +241,7 @@ public class ASTDruidConditionUtilTest {
                 "\tAND a.type = ? \n" +
                 "\tAND a.rid = r.id \n" +
                 "\tAND a.is_delete = 0 \n" +
-                "\tAND r.is_delete = 0", "tenant_id = 2", "mysql");
+                "\tAND r.is_delete = 0", "tenant_id = 2");
         Assert.assertEquals("SELECT a.id, a.oid, a.rid, a.type, r.NAME\n" +
                 "\t, r.description, r.roles\n" +
                 "FROM p_role_acl a, p_role r\n" +
@@ -255,8 +253,8 @@ public class ASTDruidConditionUtilTest {
                 "\tAND a.tenant_id = 2\n" +
                 "\tAND r.tenant_id = 2", from);
 
-        String injectConditionN = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
-                "tenant_id = 2 and name like 'a' or b > 10", "mysql");
+        String injectConditionN = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
+                "tenant_id = 2 and name like 'a' or b > 10");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
@@ -269,12 +267,12 @@ public class ASTDruidConditionUtilTest {
                 "\t\tAND t1.name LIKE 'a'\n" +
                 "\t\tOR t1.b > 10)", injectConditionN);
 
-        String wherePart = ASTDruidUtil.addAndCondition("SELECT t1.a, t2.b\n" +
+        String wherePart = ASTDruidTestUtil.addAndCondition("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
                 "\tON t1.dept_id = t2.id\n" +
                 "\t\tAND t2.tenant_id = 2 and t2.type = 1\n" +
-                "WHERE t1.id = ?  and t1.type = 1", "tenant_id = 1", "mysql");
+                "WHERE t1.id = ?  and t1.type = 1", "tenant_id = 1");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
@@ -282,13 +280,13 @@ public class ASTDruidConditionUtilTest {
                 "\t\tAND t2.tenant_id = 2 and t2.type = 1\n" +
                 "WHERE t1.id = ?  and t1.type = 1", wherePart);
 
-        String where = ASTDruidUtil.addAndCondition("SELECT t1.a, t2.b\n" +
+        String where = ASTDruidTestUtil.addAndCondition("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
                 "\tON t1.dept_id = t2.id\n" +
                 "\t\tAND t2.tenant_id = 2 and t2.type = 1\n" +
                 "WHERE t1.id = ?  and t1.type = 1\n" +
-                "\tAND t1.tenant_id = 2", "tenant_id = 1", "mysql");
+                "\tAND t1.tenant_id = 2", "tenant_id = 1");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
@@ -297,26 +295,26 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?  and t1.type = 1\n" +
                 "\tAND t1.tenant_id = 2", where);
 
-        String insert3 = ASTDruidUtil.addAndCondition("SELECT * INTO p_user_1 FROM p_user  ", "tenant_id = 2", "mysql");
+        String insert3 = ASTDruidTestUtil.addAndCondition("SELECT * INTO p_user_1 FROM p_user  ", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "INTO p_user_1\n" +
                 "FROM p_user\n" +
                 "WHERE p_user.tenant_id = 2", insert3);
 
-        String set = ASTDruidUtil.addAndCondition("set global query_cache_type = OFF ", "tenant_id = 2", "mysql");
+        String set = ASTDruidTestUtil.addAndCondition("set global query_cache_type = OFF ", "tenant_id = 2");
         Assert.assertEquals("set global query_cache_type = OFF ", set);
 
-        String at = ASTDruidUtil.addAndCondition("SELECT @@auto_generate_certs ", "tenant_id = 2", "mysql");
+        String at = ASTDruidTestUtil.addAndCondition("SELECT @@auto_generate_certs ", "tenant_id = 2");
         Assert.assertEquals("SELECT @@auto_generate_certs ", at);
 
-        String show = ASTDruidUtil.addAndCondition("SHOW VARIABLES ", "tenant_id = 2", "mysql");
+        String show = ASTDruidTestUtil.addAndCondition("SHOW VARIABLES ", "tenant_id = 2");
         Assert.assertEquals("SHOW VARIABLES ", show);
 
-        String dual = ASTDruidUtil.addAndCondition("SELECT 1 FROM DUAL ", "tenant_id = 2", "mysql");
+        String dual = ASTDruidTestUtil.addAndCondition("SELECT 1 FROM DUAL ", "tenant_id = 2");
         Assert.assertEquals("SELECT 1 FROM DUAL ", dual);
 
         // join 1个表
-        String join1 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2", "mysql");
+        String join1 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
@@ -325,7 +323,7 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?\n" +
                 "\tAND t1.tenant_id = 2", join1);
 
-        String join2 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2", "mysql");
+        String join2 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tRIGHT JOIN dept t2\n" +
@@ -334,7 +332,7 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?\n" +
                 "\tAND t1.tenant_id = 2", join2);
 
-        String join3 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2", "mysql");
+        String join3 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tJOIN dept t2\n" +
@@ -344,7 +342,7 @@ public class ASTDruidConditionUtilTest {
                 "\tAND t1.tenant_id = 2", join3);
 
         // join 2个表
-        String join4 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id  left join dept t3 on t1.dept_id = t3.id  where t1.id = ?", "tenant_id = 2", "mysql");
+        String join4 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id  left join dept t3 on t1.dept_id = t3.id  where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
@@ -356,7 +354,7 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?\n" +
                 "\tAND t1.tenant_id = 2", join4);
 
-        String join5 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", "mysql");
+        String join5 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tRIGHT JOIN dept t2\n" +
@@ -368,7 +366,7 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?\n" +
                 "\tAND t1.tenant_id = 2", join5);
 
-        String join6 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id left join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", "mysql");
+        String join6 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id left join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tRIGHT JOIN dept t2\n" +
@@ -380,7 +378,7 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?\n" +
                 "\tAND t1.tenant_id = 2", join6);
 
-        String join7 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", "mysql");
+        String join7 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
@@ -392,7 +390,7 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?\n" +
                 "\tAND t1.tenant_id = 2", join7);
 
-        String join8 = ASTDruidUtil.addAndCondition("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id  join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", "mysql");
+        String join8 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id  join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\tJOIN dept t2\n" +
@@ -404,19 +402,19 @@ public class ASTDruidConditionUtilTest {
                 "WHERE t1.id = ?\n" +
                 "\tAND t1.tenant_id = 2", join8);
 
-        String select1 = ASTDruidUtil.addAndCondition("select * from user  where id = ?", "tenant_id = 2", "mysql");
+        String select1 = ASTDruidTestUtil.addAndCondition("select * from user  where id = ?", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "WHERE id = ?\n" +
                 "\tAND user.tenant_id = 2", select1);
 
-        String select2 = ASTDruidUtil.addAndCondition("select * from user", "tenant_id = 2", "mysql");
+        String select2 = ASTDruidTestUtil.addAndCondition("select * from user", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "WHERE user.tenant_id = 2", select2);
 
         // union 联合
-        String select3 = ASTDruidUtil.addAndCondition("select id,name from user t1 union select id,name from user", "tenant_id = 2", "mysql");
+        String select3 = ASTDruidTestUtil.addAndCondition("select id,name from user t1 union select id,name from user", "tenant_id = 2");
         Assert.assertEquals("SELECT id, name\n" +
                 "FROM user t1\n" +
                 "WHERE t1.tenant_id = 2\n" +
@@ -426,7 +424,7 @@ public class ASTDruidConditionUtilTest {
                 "WHERE user.tenant_id = 2", select3);
 
         // 子查询
-        String select4 = ASTDruidUtil.addAndCondition("select * from (select id,name from user t1 union select id,name from user) t ", "tenant_id = 2", "mysql");
+        String select4 = ASTDruidTestUtil.addAndCondition("select * from (select id,name from user t1 union select id,name from user) t ", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM (\n" +
                 "\tSELECT id, name\n" +
@@ -438,7 +436,7 @@ public class ASTDruidConditionUtilTest {
                 "\tWHERE user.tenant_id = 2\n" +
                 ") t", select4);
 
-        String select5 = ASTDruidUtil.addAndCondition("select * from (select id,name from user t1 union all select id,name from user) t1 left join (select * from (select id,name from user t1 union all select id,name from user) t2) on t1.id = t2.id", "tenant_id = 2", "mysql");
+        String select5 = ASTDruidTestUtil.addAndCondition("select * from (select id,name from user t1 union all select id,name from user) t1 left join (select * from (select id,name from user t1 union all select id,name from user) t2) on t1.id = t2.id", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM (\n" +
                 "\tSELECT id, name\n" +
@@ -463,11 +461,11 @@ public class ASTDruidConditionUtilTest {
                 "\t)\n" +
                 "\tON t1.id = t2.id", select5);
 
-        String select6 = ASTDruidUtil.addAndCondition(
+        String select6 = ASTDruidTestUtil.addAndCondition(
                 "select * from " +
                         "(select id,name from user t1_1 union all select id,name from user t1_2) t1 " +
                         "left join (select * from (select id,name from user t2_1_1 union all select id,name from user t2_1_2) t2_1) t2 on t1.id = t2.id " +
-                        "left join user t3 on t1.id = t3.id", "tenant_id = 2", "mysql");
+                        "left join user t3 on t1.id = t3.id", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM (\n" +
                 "\tSELECT id, name\n" +
@@ -495,12 +493,12 @@ public class ASTDruidConditionUtilTest {
                 "\tON t1.id = t3.id\n" +
                 "\t\tAND t3.tenant_id = 2", select6);
 
-        String select61 = ASTDruidUtil.addAndCondition(
+        String select61 = ASTDruidTestUtil.addAndCondition(
                 "select * from " +
                         "(select id,name from user t1_1 union all select id,name from user t1_2) t1 " +
                         "left join (select * from (select id,name from user t2_1_1 union all select id,name from user t2_1_2) t2_1) t2 on t1.id = t2.id " +
                         "left join user t3 on t1.id = t3.id " +
-                        "where id = 1 ", "tenant_id = 2", "mysql");
+                        "where id = 1 ", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM (\n" +
                 "\tSELECT id, name\n" +
@@ -529,7 +527,7 @@ public class ASTDruidConditionUtilTest {
                 "\t\tAND t3.tenant_id = 2\n" +
                 "WHERE id = 1", select61);
 
-        String select7 = ASTDruidUtil.addAndCondition("select * from user left join dept on dept.id = user.dept_id", "tenant_id = 2", "mysql");
+        String select7 = ASTDruidTestUtil.addAndCondition("select * from user left join dept on dept.id = user.dept_id", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "\tLEFT JOIN dept\n" +
@@ -537,7 +535,7 @@ public class ASTDruidConditionUtilTest {
                 "\t\tAND dept.tenant_id = 2\n" +
                 "WHERE user.tenant_id = 2", select7);
 
-        String select8 = ASTDruidUtil.addAndCondition("select * from user t1 left join dept on dept.id = t1.dept_id", "tenant_id = 2", "mysql");
+        String select8 = ASTDruidTestUtil.addAndCondition("select * from user t1 left join dept on dept.id = t1.dept_id", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept\n" +
@@ -545,7 +543,7 @@ public class ASTDruidConditionUtilTest {
                 "\t\tAND dept.tenant_id = 2\n" +
                 "WHERE t1.tenant_id = 2", select8);
 
-        String select9 = ASTDruidUtil.addAndCondition("select * from user  left join dept t1 on t1.id = user.dept_id", "tenant_id = 2", "mysql");
+        String select9 = ASTDruidTestUtil.addAndCondition("select * from user  left join dept t1 on t1.id = user.dept_id", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "\tLEFT JOIN dept t1\n" +
@@ -554,14 +552,14 @@ public class ASTDruidConditionUtilTest {
                 "WHERE user.tenant_id = 2", select9);
 
         // or
-        String select10 = ASTDruidUtil.addAndCondition("select * from user  where id = 1 or name = '1' ", "tenant_id = 2", "mysql");
+        String select10 = ASTDruidTestUtil.addAndCondition("select * from user  where id = 1 or name = '1' ", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "WHERE (id = 1\n" +
                 "\t\tOR name = '1')\n" +
                 "\tAND user.tenant_id = 2", select10);
 
-        String select11 = ASTDruidUtil.addAndCondition("select * from user  where (id = 1 or name = '1') and (id = 2 or name = '2') ", "tenant_id = 2", "mysql");
+        String select11 = ASTDruidTestUtil.addAndCondition("select * from user  where (id = 1 or name = '1') and (id = 2 or name = '2') ", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "WHERE (id = 1\n" +
@@ -570,7 +568,7 @@ public class ASTDruidConditionUtilTest {
                 "\t\tOR name = '2')\n" +
                 "\tAND user.tenant_id = 2", select11);
 
-        String select12 = ASTDruidUtil.addAndCondition("select * from user  where (id = 1 and name = '1') or (id = 2 and name = '2') ", "tenant_id = 2", "mysql");
+        String select12 = ASTDruidTestUtil.addAndCondition("select * from user  where (id = 1 and name = '1') or (id = 2 and name = '2') ", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "WHERE ((id = 1\n" +
@@ -580,7 +578,7 @@ public class ASTDruidConditionUtilTest {
                 "\tAND user.tenant_id = 2", select12);
 
         // EXISTS
-        String select13 = ASTDruidUtil.addAndCondition("select * from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  and EXISTS (select id from p where p.id = id)", "tenant_id = 2", "mysql");
+        String select13 = ASTDruidTestUtil.addAndCondition("select * from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  and EXISTS (select id from p where p.id = id)", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "WHERE ((id = 1\n" +
@@ -595,7 +593,7 @@ public class ASTDruidConditionUtilTest {
                 "\t\t))\n" +
                 "\tAND user.tenant_id = 2", select13);
 
-        String select14 = ASTDruidUtil.addAndCondition("select * from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  and EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id)", "tenant_id = 2", "mysql");
+        String select14 = ASTDruidTestUtil.addAndCondition("select * from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  and EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id)", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM user\n" +
                 "WHERE ((id = 1\n" +
@@ -613,8 +611,8 @@ public class ASTDruidConditionUtilTest {
                 "\t\t))\n" +
                 "\tAND user.tenant_id = 2", select14);
 
-        String select15 = ASTDruidUtil.addAndCondition("select case when EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id) then 1 end from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  " +
-                "and EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id)", "tenant_id = 2", "mysql");
+        String select15 = ASTDruidTestUtil.addAndCondition("select case when EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id) then 1 end from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  " +
+                "and EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id)", "tenant_id = 2");
         Assert.assertEquals("SELECT CASE \n" +
                 "\t\tWHEN EXISTS (\n" +
                 "\t\t\tSELECT id\n" +
@@ -642,8 +640,8 @@ public class ASTDruidConditionUtilTest {
                 "\t\t))\n" +
                 "\tAND user.tenant_id = 2", select15);
 
-        String select16 = ASTDruidUtil.addAndCondition("select (select count(1) from p3 where p3.id = user.id) from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  " +
-                "and EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id)", "tenant_id = 2", "mysql");
+        String select16 = ASTDruidTestUtil.addAndCondition("select (select count(1) from p3 where p3.id = user.id) from user  where (id = 1 and name = '1') or (id = 2 and name = '2')  " +
+                "and EXISTS (select id from p1 left join p2 on p2.id = p1.dept_id where p1.id = user.id)", "tenant_id = 2");
         Assert.assertEquals("SELECT (\n" +
                 "\t\tSELECT count(1)\n" +
                 "\t\tFROM p3\n" +
@@ -667,7 +665,7 @@ public class ASTDruidConditionUtilTest {
                 "\tAND user.tenant_id = 2", select16);
 
         // case WHEN END
-        String casewhen = ASTDruidUtil.addAndCondition("SELECT\n" +
+        String casewhen = ASTDruidTestUtil.addAndCondition("SELECT\n" +
                 "\tt10.interview_operate_uid AS interviewOperateUid,\n" +
                 "\tt10.over_status AS overStatus,\n" +
                 "\tt11.enter_offer_time AS enterOfferTime,\n" +
@@ -778,7 +776,7 @@ public class ASTDruidConditionUtilTest {
                 "\t\t\t\t\tAND t.tenant_id = 1 \n" +
                 "\t\t\t\tORDER BY\n" +
                 "\t\t\t\tt.`last_update_time` DESC \n" +
-                "\tLIMIT ?", "tenant_id = 2", "mysql");
+                "\tLIMIT ?", "tenant_id = 2");
 
         Assert.assertEquals("SELECT\n" +
                 "\tt10.interview_operate_uid AS interviewOperateUid,\n" +
@@ -894,7 +892,7 @@ public class ASTDruidConditionUtilTest {
                 "\tLIMIT ?", casewhen);
 
         // @
-        String select17 = ASTDruidUtil.addAndCondition("SELECT\n" +
+        String select17 = ASTDruidTestUtil.addAndCondition("SELECT\n" +
                 "* \n" +
                 "FROM\n" +
                 "\t(\n" +
@@ -956,7 +954,7 @@ public class ASTDruidConditionUtilTest {
                 "\tWHERE\n" +
                 "\t\ttt.DATA > 0 \n" +
                 "\t) b \n" +
-                "\tLIMIT 10", "tenant_id = 2", "mysql");
+                "\tLIMIT 10", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "FROM (\n" +
                 "\tSELECT tt.*\n" +
@@ -1013,14 +1011,14 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void update() {
-        String updateexist = ASTDruidUtil.addAndCondition(" UPDATE user  SET `status` = 2 WHERE id =1 and tenant_id = 1", "tenant_id = 2", "mysql");
+        String updateexist = ASTDruidTestUtil.addAndCondition(" UPDATE user  SET `status` = 2 WHERE id =1 and tenant_id = 1", "tenant_id = 2");
         Assert.assertEquals(" UPDATE user  SET `status` = 2 WHERE id =1 and tenant_id = 1", updateexist);
 
-        String join = ASTDruidUtil.addAndCondition(" update pipeline\n" +
+        String join = ASTDruidTestUtil.addAndCondition(" update pipeline\n" +
                 "      left join (select interview_time, pipeline_id from `pipeline_interview`\n" +
                 "      where delete_flag = 0 and cancel_interview_flag = 0 and pipeline_id = 1\n" +
                 "      order by create_time desc,id desc limit 1) t2 on t2.pipeline_id = pipeline.id\n" +
-                "      set pipeline.last_interview_time = t2.interview_time where pipeline.id = 1", "tenant_id = 2", "mysql");
+                "      set pipeline.last_interview_time = t2.interview_time where pipeline.id = 1", "tenant_id = 2");
         Assert.assertEquals("UPDATE pipeline\n" +
                 "\tLEFT JOIN (\n" +
                 "\t\tSELECT interview_time, pipeline_id\n" +
@@ -1037,21 +1035,21 @@ public class ASTDruidConditionUtilTest {
                 "WHERE pipeline.id = 1\n" +
                 "\tAND pipeline.tenant_id = 2", join);
 
-        String update1 = ASTDruidUtil.addAndCondition(" UPDATE user t1 SET `status` = 0 WHERE id = 1 or name = 2", "tenant_id = 2", "mysql");
+        String update1 = ASTDruidTestUtil.addAndCondition(" UPDATE user t1 SET `status` = 0 WHERE id = 1 or name = 2", "tenant_id = 2");
         Assert.assertEquals("UPDATE user t1\n" +
                 "SET `status` = 0\n" +
                 "WHERE (id = 1\n" +
                 "\t\tOR name = 2)\n" +
                 "\tAND t1.tenant_id = 2", update1);
 
-        String update2 = ASTDruidUtil.addAndCondition(" UPDATE user t1, dept t2  SET t1.`status` = t2.status WHERE t1.dept_id = t2.id", "tenant_id = 2", "mysql");
+        String update2 = ASTDruidTestUtil.addAndCondition(" UPDATE user t1, dept t2  SET t1.`status` = t2.status WHERE t1.dept_id = t2.id", "tenant_id = 2");
         Assert.assertEquals("UPDATE user t1, dept t2\n" +
                 "SET t1.`status` = t2.status\n" +
                 "WHERE t1.dept_id = t2.id\n" +
                 "\tAND t1.tenant_id = 2\n" +
                 "\tAND t2.tenant_id = 2", update2);
 
-        String update3 = ASTDruidUtil.addAndCondition(" UPDATE user t1, dept t2  SET t1.`status` = t2.status WHERE t1.dept_id = t2.id and t1.id in (select id from user)", "tenant_id = 2", "mysql");
+        String update3 = ASTDruidTestUtil.addAndCondition(" UPDATE user t1, dept t2  SET t1.`status` = t2.status WHERE t1.dept_id = t2.id and t1.id in (select id from user)", "tenant_id = 2");
         Assert.assertEquals("UPDATE user t1, dept t2\n" +
                 "SET t1.`status` = t2.status\n" +
                 "WHERE t1.dept_id = t2.id\n" +
@@ -1068,19 +1066,19 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void insert() {
-        String insert1 = ASTDruidUtil.addAndCondition("insert into `base_area` (`id`, `name`) select id,name from copy ", "tenant_id = 2", "mysql");
+        String insert1 = ASTDruidTestUtil.addAndCondition("insert into `base_area` (`id`, `name`) select id,name from copy ", "tenant_id = 2");
         Assert.assertEquals("INSERT INTO `base_area` (`id`, `name`)\n" +
                 "SELECT id, name\n" +
                 "FROM copy\n" +
                 "WHERE copy.tenant_id = 2", insert1);
 
-        String insert2 = ASTDruidUtil.addAndCondition("replace into `base_area` (`id`, `name`) select id,name from copy ", "tenant_id = 2", "mysql");
+        String insert2 = ASTDruidTestUtil.addAndCondition("replace into `base_area` (`id`, `name`) select id,name from copy ", "tenant_id = 2");
         Assert.assertEquals("REPLACE INTO `base_area` (`id`, `name`)\n" +
                 "\tSELECT id, name\n" +
                 "\tFROM copy\n" +
                 "\tWHERE copy.tenant_id = 2", insert2);
 
-        String insert3 = ASTDruidUtil.addAndCondition("select * into p_user_1 FROM p_user  ", "tenant_id = 2", "mysql");
+        String insert3 = ASTDruidTestUtil.addAndCondition("select * into p_user_1 FROM p_user  ", "tenant_id = 2");
         Assert.assertEquals("SELECT *\n" +
                 "INTO p_user_1\n" +
                 "FROM p_user\n" +
@@ -1091,23 +1089,23 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void delete() {
-        String delete1 = ASTDruidUtil.addAndCondition("delete from user", "tenant_id = 2", "mysql");
+        String delete1 = ASTDruidTestUtil.addAndCondition("delete from user", "tenant_id = 2");
         Assert.assertEquals("DELETE FROM user\n" +
                 "WHERE user.tenant_id = 2", delete1);
 
-        String delete2 = ASTDruidUtil.addAndCondition(" delete from user t1  WHERE id = 1 or name = 2", "tenant_id = 2", "mysql");
+        String delete2 = ASTDruidTestUtil.addAndCondition(" delete from user t1  WHERE id = 1 or name = 2", "tenant_id = 2");
         Assert.assertEquals("DELETE FROM user t1\n" +
                 "WHERE (id = 1\n" +
                 "\t\tOR name = 2)\n" +
                 "\tAND t1.tenant_id = 2", delete2);
 
-        String delete3 = ASTDruidUtil.addAndCondition(" delete from user t1, dept t2 WHERE t1.dept_id = t2.id", "tenant_id = 2", "mysql");
+        String delete3 = ASTDruidTestUtil.addAndCondition(" delete from user t1, dept t2 WHERE t1.dept_id = t2.id", "tenant_id = 2");
         Assert.assertEquals("DELETE FROM user t1, dept t2\n" +
                 "WHERE t1.dept_id = t2.id\n" +
                 "\tAND t1.tenant_id = 2\n" +
                 "\tAND t2.tenant_id = 2", delete3);
 
-        String delete4 = ASTDruidUtil.addAndCondition(" delete from user t1, dept t2 WHERE t1.dept_id = t2.id and t1.id in (select id from user)", "tenant_id = 2", "mysql");
+        String delete4 = ASTDruidTestUtil.addAndCondition(" delete from user t1, dept t2 WHERE t1.dept_id = t2.id and t1.id in (select id from user)", "tenant_id = 2");
         Assert.assertEquals("DELETE FROM user t1, dept t2\n" +
                 "WHERE t1.dept_id = t2.id\n" +
                 "\tAND t1.id IN (\n" +

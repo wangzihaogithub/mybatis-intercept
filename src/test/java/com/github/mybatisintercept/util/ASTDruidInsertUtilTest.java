@@ -1,6 +1,5 @@
-package com.github.mybatisintercept;
+package com.github.mybatisintercept.util;
 
-import com.github.mybatisintercept.util.ASTDruidUtil;
 import org.junit.Assert;
 import org.junit.Test;
 
