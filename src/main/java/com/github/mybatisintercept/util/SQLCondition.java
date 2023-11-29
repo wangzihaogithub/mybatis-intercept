@@ -1,7 +1,5 @@
 package com.github.mybatisintercept.util;
 
-import com.alibaba.druid.sql.ast.SQLStatement;
-
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -12,18 +10,18 @@ public class SQLCondition {
         JOIN
     }
 
-    private final SQLStatement sql;
+    private final String sql;
     private TypeEnum type;
     private String fromTableAlias;
     private String fromTableName;
     private String fromTableSchema;
     private List<SQLColumn> columnList;
 
-    public SQLCondition(SQLStatement sql) {
+    public SQLCondition(String sql) {
         this.sql = sql;
     }
 
-    public SQLStatement sql() {
+    public String getSql() {
         return sql;
     }
 

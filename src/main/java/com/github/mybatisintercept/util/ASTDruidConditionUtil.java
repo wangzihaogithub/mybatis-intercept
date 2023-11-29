@@ -66,7 +66,7 @@ public class ASTDruidConditionUtil {
         if (!(injectConditionExpr instanceof SQLBinaryOpExpr)) {
             throw new IllegalArgumentException("no support injectCondition = " + injectCondition);
         }
-        boolean change = addCondition(ast, op, (SQLBinaryOpExpr) injectConditionExpr, appendConditionToLeft, existInjectConditionStrategyEnum, wrapDialectSkip(dbType, skip), isJoinUniqueKey);
+        boolean change = addCondition(sql, ast, op, (SQLBinaryOpExpr) injectConditionExpr, appendConditionToLeft, existInjectConditionStrategyEnum, wrapDialectSkip(dbType, skip), isJoinUniqueKey);
         if (change) {
             return SQLUtils.toSQLString(ast, dbType);
         } else {
@@ -290,9 +290,9 @@ public class ASTDruidConditionUtil {
         return exist[0];
     }
 
-    public static boolean addCondition(SQLStatement ast, SQLBinaryOperator op, SQLBinaryOpExpr injectCondition,
-                                       boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
-                                       BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {
+    private static boolean addCondition(String sql, SQLStatement ast, SQLBinaryOperator op, SQLBinaryOpExpr injectCondition,
+                                        boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
+                                        BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {
         if (ast instanceof MySqlShowStatement || ast instanceof SQLSetStatement) {
             return false;
         }
@@ -336,7 +336,7 @@ public class ASTDruidConditionUtil {
 
         boolean[] change = new boolean[1];
         ast.accept(new SQLASTVisitorAdapter() {
-            private final SQLCondition sqlJoin = new SQLCondition(ast);
+            private final SQLCondition sqlJoin = new SQLCondition(sql);
             private final SQLColumn sqlColumn = new SQLColumn();
             private boolean select;
             private boolean update;
