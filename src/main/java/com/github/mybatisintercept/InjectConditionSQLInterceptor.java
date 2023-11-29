@@ -191,7 +191,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
 
         boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
         if (enabledUniqueKey) {
-            if (PlatformDependentUtil.EXIST_SPRING_BOOT) {
+            if (PlatformDependentUtil.EXIST_SPRING_BOOT && "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKeySelect", "true"))) {
                 if ("mysql".equalsIgnoreCase(dbType) || "mariadb".equalsIgnoreCase(dbType)) {
                     PlatformDependentUtil.onSpringDatasourceReady(new MysqlDataSourcesConsumer(tableUniqueKeyColumnMap));
                 }
