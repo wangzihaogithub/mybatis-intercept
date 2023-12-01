@@ -76,16 +76,43 @@ public class ASTDruidConditionUtilUniqueKeyEqualityTest {
         Map<String, List<String>> table2 = new HashMap<>();
         table2.put("dept", Arrays.asList("id"));
         table2.put("user", Arrays.asList("id"));
+
+        String wherePart = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\t, dept t2 \n" +
+                "WHERE   t2.type = 1 and t1.dept_id = t2.id and t1.id = ?  and t1.type = 1", "tenant_id = 1", table2);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1, dept t2\n" +
+                "WHERE t2.type = 1\n" +
+                "\tAND t1.dept_id = t2.id\n" +
+                "\tAND t1.id = ?\n" +
+                "\tAND t1.type = 1\n" +
+                "\tAND t1.tenant_id = 1", wherePart);
+
+
         String injectConditionN2 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 ,dept t2 where t1.dept_id = t2.id and t1.id = 2 and t1.id = ? ",
                 "tenant_id = 2 and name like 'a' or b > 10", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 ,dept t2 where t1.dept_id = t2.id and t1.id = 2 and t1.id = ? ", injectConditionN2);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1, dept t2\n" +
+                "WHERE t1.dept_id = t2.id\n" +
+                "\tAND t1.id = 2\n" +
+                "\tAND t1.id = ?\n" +
+                "\tAND (t1.tenant_id = 2\n" +
+                "\t\tAND t1.name LIKE 'a'\n" +
+                "\t\tOR t1.b > 10)", injectConditionN2);
 
         Map<String, List<String>> table = new HashMap<>();
         table.put("dept", Arrays.asList("id"));
         table.put("user", Arrays.asList("id"));
         String injectConditionN = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
                 "tenant_id = 2 and name like 'a' or b > 10", table);
-        Assert.assertEquals("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?", injectConditionN);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND (t1.tenant_id = 2\n" +
+                "\t\tAND t1.name LIKE 'a'\n" +
+                "\t\tOR t1.b > 10)", injectConditionN);
 
 
         Map<String, List<String>> table1 = new HashMap<>();
@@ -294,12 +321,18 @@ public class ASTDruidConditionUtilUniqueKeyEqualityTest {
                 "\tAND a.rid = r.id\n" +
                 "\tAND a.is_delete = 0\n" +
                 "\tAND r.is_delete = 0\n" +
-                "\tAND a.tenant_id = 2\n" +
-                "\tAND r.tenant_id = 2", from);
+                "\tAND r.tenant_id = 2\n" +
+                "\tAND a.tenant_id = 2", from);
 
         String injectConditionN = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
                 "tenant_id = 2 and name like 'a' or b > 10", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?", injectConditionN);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND (t1.tenant_id = 2\n" +
+                "\t\tAND t1.name LIKE 'a'\n" +
+                "\t\tOR t1.b > 10)", injectConditionN);
 
         String wherePart = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
@@ -311,8 +344,11 @@ public class ASTDruidConditionUtilUniqueKeyEqualityTest {
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
                 "\tON t1.dept_id = t2.id\n" +
-                "\t\tAND t2.tenant_id = 2 and t2.type = 1\n" +
-                "WHERE t1.id = ?  and t1.type = 1", wherePart);
+                "\t\tAND t2.tenant_id = 2\n" +
+                "\t\tAND t2.type = 1\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.type = 1\n" +
+                "\tAND t1.tenant_id = 1", wherePart);
 
         String where = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
@@ -349,32 +385,72 @@ public class ASTDruidConditionUtilUniqueKeyEqualityTest {
 
         // join 1个表
         String join1 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?", join1);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join1);
 
         String join2 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id where t1.id = ?", join2);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tRIGHT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join2);
 
         String join3 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id where t1.id = ?", join3);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tJOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join3);
 
         // join 2个表
         String join4 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id  left join dept t3 on t1.dept_id = t3.id  where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id  left join dept t3 on t1.dept_id = t3.id  where t1.id = ?", join4);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "\tLEFT JOIN dept t3 ON t1.dept_id = t3.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join4);
 
         String join5 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", join5);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tRIGHT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "\tRIGHT JOIN dept t3 ON t1.dept_id = t3.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join5);
 
         String join6 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id left join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 right join dept t2 on t1.dept_id = t2.id left join dept t3 on t1.dept_id = t3.id where t1.id = ?", join6);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tRIGHT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "\tLEFT JOIN dept t3 ON t1.dept_id = t3.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join6);
 
         String join7 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id right join dept t3 on t1.dept_id = t3.id where t1.id = ?", join7);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "\tRIGHT JOIN dept t3 ON t1.dept_id = t3.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join7);
 
         String join8 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id  join dept t3 on t1.dept_id = t3.id where t1.id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select t1.a, t2.b from user t1  join dept t2 on t1.dept_id = t2.id  join dept t3 on t1.dept_id = t3.id where t1.id = ?", join8);
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tJOIN dept t2 ON t1.dept_id = t2.id\n" +
+                "\tJOIN dept t3 ON t1.dept_id = t3.id\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND t1.tenant_id = 2", join8);
 
         String select1 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select * from user  where id = ?", "tenant_id = 2", table2);
-        Assert.assertEquals("select * from user  where id = ?", select1);
+        Assert.assertEquals("SELECT *\n" +
+                "FROM user\n" +
+                "WHERE id = ?\n" +
+                "\tAND user.tenant_id = 2", select1);
 
         String select223 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("select * from user  where 1 = ?", "tenant_id = 2", table2);
         Assert.assertEquals("SELECT *\n" +

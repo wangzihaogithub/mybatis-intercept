@@ -35,7 +35,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     private static final List<InjectConditionSQLInterceptor> INSTANCE_LIST = Collections.synchronizedList(new LinkedList<>());
     private final Set<String> interceptPackageNames = new LinkedHashSet<>();
     private final Set<String> skipTableNames = new LinkedHashSet<>();
-    private final Map<String, List<String>> tableUniqueKeyColumnMap = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = Collections.synchronizedMap(new HashMap<>());
     private final AtomicBoolean initFlag = new AtomicBoolean();
     private String dbType;
     private ASTDruidConditionUtil.ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum;
@@ -44,7 +44,9 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     private BiPredicate<String, String> skipPredicate = (schema, tableName) -> {
         return skipTableNames.contains(tableName);
     };
-    private Predicate<SQLCondition> uniqueKeyPredicate = sqlCondition -> sqlCondition.existUniqueKeyColumn(tableUniqueKeyColumnMap);
+    private Predicate<SQLCondition> uniqueKeyPredicate = sqlCondition -> {
+        return sqlCondition.isCanIgnoreInject(tableUniqueKeyColumnMap);
+    };
     private Properties properties;
 
     public InjectConditionSQLInterceptor() {
@@ -101,7 +103,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         return skipTableNames;
     }
 
-    public Map<String, List<String>> getTableUniqueKeyColumnMap() {
+    public Map<String, List<TableUniqueIndex>> getTableUniqueKeyColumnMap() {
         return tableUniqueKeyColumnMap;
     }
 
@@ -189,22 +191,24 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         String interceptPackageNames = properties.getProperty("InjectConditionSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectConditionSQLInterceptor.skipTableNames", "");
 
+        this.conditionExpression = SQL.compile(conditionExpression, Collections.emptyMap());
+
         boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
         if (enabledUniqueKey) {
-            if (PlatformDependentUtil.EXIST_SPRING_BOOT && "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKeySelect", "true"))) {
-                if ("mysql".equalsIgnoreCase(dbType) || "mariadb".equalsIgnoreCase(dbType)) {
-                    PlatformDependentUtil.onSpringDatasourceReady(new MysqlDataSourcesConsumer(tableUniqueKeyColumnMap));
-                }
-            }
             // uniqueKey解析格式：table1=col1,col2;table2=col3;table3=col5,col6
             String tableUniqueKeyColumn = properties.getProperty("InjectConditionSQLInterceptor.uniqueKey", "");
             this.tableUniqueKeyColumnMap.putAll(parseTableUniqueKeyColumnMap(Arrays.asList(tableUniqueKeyColumn.split(";"))));
+
+            if (PlatformDependentUtil.EXIST_SPRING_BOOT && "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledDatasourceSelect", "true"))) {
+                if ("mysql".equalsIgnoreCase(dbType) || "mariadb".equalsIgnoreCase(dbType)) {
+                    PlatformDependentUtil.onSpringDatasourceReady(new MysqlDataSourcesConsumer(this.tableUniqueKeyColumnMap, this.skipTableNames, this.conditionExpression));
+                }
+            }
         }
 
         this.valueProvider = new StaticMethodAccessor<>(valueProvider);
         this.dbType = dbType;
         this.existInjectConditionStrategyEnum = ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.valueOf(existInjectConditionStrategyEnum);
-        this.conditionExpression = SQL.compile(conditionExpression, Collections.emptyMap());
         if (interceptPackageNames.trim().length() > 0) {
             this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
@@ -214,25 +218,61 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     }
 
     static class MysqlDataSourcesConsumer implements Consumer<Collection<DataSource>> {
-        private final Map<String, List<String>> tableUniqueKeyColumnMap;
+        private final Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap;
+        private final Set<String> skipTableNames;
+        private final SQL conditionExpression;
 
-        private MysqlDataSourcesConsumer(Map<String, List<String>> tableUniqueKeyColumnMap) {
+        private MysqlDataSourcesConsumer(Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap, Set<String> skipTableNames, SQL conditionExpression) {
             this.tableUniqueKeyColumnMap = tableUniqueKeyColumnMap;
+            this.skipTableNames = skipTableNames;
+            this.conditionExpression = conditionExpression;
         }
 
         @Override
         public void accept(Collection<DataSource> dataSources) {
-            Map<String, List<String>> map = new LinkedHashMap<>();
+            if (dataSources == null || dataSources.isEmpty()) {
+                return;
+            }
+            Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = selectTableUniqueKeyColumnMap(dataSources);
+            for (Map.Entry<String, List<TableUniqueIndex>> entry : tableUniqueKeyColumnMap.entrySet()) {
+                this.tableUniqueKeyColumnMap.putIfAbsent(entry.getKey(), entry.getValue());
+            }
+
+            SQL compile = SQL.compile(conditionExpression.getSourceSql(), e -> "?");
+            Set<String> columnList = new LinkedHashSet<>(ASTDruidConditionUtil.getColumnList(compile.getExprSql()));
+            Set<String> missColumnTableList = selectMissColumnTableList(dataSources, columnList);
+            this.skipTableNames.addAll(missColumnTableList);
+        }
+
+        private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMap(Collection<DataSource> dataSources) {
+            Map<String, List<TableUniqueIndex>> map = new LinkedHashMap<>();
             for (DataSource dataSource : dataSources) {
                 try {
                     String selectCatalog = getCatalog(dataSource);
-                    Map<String, List<String>> rowMap = selectTableUniqueKeyColumnMapByInfo(dataSource, selectCatalog);
+                    Map<String, List<TableUniqueIndex>> rowMap = selectTableUniqueKeyColumnMapByStatistics(dataSource, selectCatalog);
                     map.putAll(rowMap);
                 } catch (Exception ignored) {
 
                 }
             }
-            tableUniqueKeyColumnMap.putAll(map);
+            return map;
+        }
+
+        private Set<String> selectMissColumnTableList(Collection<DataSource> dataSources, Collection<String> columnNameList) {
+            Set<String> tableList = new LinkedHashSet<>();
+            if (columnNameList == null || columnNameList.isEmpty()) {
+                return tableList;
+            }
+            for (DataSource dataSource : dataSources) {
+                try {
+                    String selectCatalog = getCatalog(dataSource);
+                    List<String> rowTableList = selectMissColumnTableList(dataSource, selectCatalog, columnNameList);
+                    tableList.addAll(rowTableList);
+                } catch (Exception ignored) {
+
+                }
+            }
+            return tableList;
         }
 
         private String getCatalog(DataSource dataSource) {
@@ -243,12 +283,47 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             }
         }
 
-        private Map<String, List<String>> selectTableUniqueKeyColumnMapByInfo(DataSource dataSource, String catalog) {
-            Map<String, List<String>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
-            Map<List<String>, List<String>> cache = new HashMap<>();
+        private List<String> selectMissColumnTableList(DataSource dataSource, String catalog, Collection<String> columnNameList) {
+            List<String> tableList = new ArrayList<>();
+            int columnNameSize = columnNameList.size();
+            StringJoiner args = new StringJoiner(",");
+            for (int i = 0; i < columnNameSize; i++) {
+                args.add("?");
+            }
             boolean isCatalog = catalog != null && !catalog.isEmpty();
-            String sql = isCatalog ? "SELECT TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = ? GROUP BY TABLE_NAME"
-                    : "SELECT TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' GROUP BY TABLE_NAME";
+            String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME,COUNT(IF(COLUMN_NAME in (" + args + "),1,null)) CNT FROM INFORMATION_SCHEMA.`COLUMNS` WHERE TABLE_SCHEMA = ? GROUP BY TABLE_NAME HAVING CNT != ?"
+                    : "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME,COUNT(IF(COLUMN_NAME in (" + args + "),1,null)) CNT FROM INFORMATION_SCHEMA.`COLUMNS` GROUP BY TABLE_NAME HAVING CNT != ?";
+            try (Connection connection = dataSource.getConnection();
+                 PreparedStatement statement = connection.prepareStatement(sql)) {
+                int parameterIndex = 0;
+                for (String columnName : columnNameList) {
+                    statement.setString(++parameterIndex, columnName);
+                }
+                if (isCatalog) {
+                    statement.setString(++parameterIndex, catalog);
+                }
+                statement.setInt(++parameterIndex, columnNameSize);
+
+                try (ResultSet rs = statement.executeQuery()) {
+                    while (rs.next()) {
+                        String tableName = rs.getString(1);
+                        tableList.add(tableName);
+                    }
+                }
+            } catch (Exception ignored) {
+                // 1044 - Access denied for user
+            }
+            return tableList;
+        }
+
+
+        private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMapByStatistics(DataSource dataSource, String catalog) {
+            Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
+            Map<List<String>, List<String>> cache = new HashMap<>();
+            Map<TableUniqueIndex, TableUniqueIndex> cache2 = new HashMap<>();
+            boolean isCatalog = catalog != null && !catalog.isEmpty();
+            String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME, GROUP_CONCAT(DISTINCT INDEX_NAME) INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND NON_UNIQUE = 0 GROUP BY TABLE_NAME,INDEX_NAME"
+                    : "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME, GROUP_CONCAT(DISTINCT INDEX_NAME) INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE NON_UNIQUE = 0 GROUP BY TABLE_NAME,INDEX_NAME";
             try (Connection connection = dataSource.getConnection();
                  PreparedStatement statement = connection.prepareStatement(sql)) {
                 if (isCatalog) {
@@ -258,8 +333,50 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                     while (rs.next()) {
                         String tableName = rs.getString(1);
                         String columnName = rs.getString(2);
-                        List<String> primaryKeyList = Arrays.asList(columnName.split(","));
-                        tableUniqueKeyColumnMap.put(tableName, cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList));
+                        String indexName = rs.getString(3);
+
+                        List<String> uniqueKeyList = Arrays.asList(columnName.split(","));
+                        List<String> uniqueKeyListCache = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
+
+                        TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(indexName, uniqueKeyListCache);
+                        TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
+
+                        tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>(1))
+                                .add(tableUniqueIndexCache);
+                    }
+                }
+                return tableUniqueKeyColumnMap;
+            } catch (Exception ignored) {
+                // 1044 - Access denied for user
+                return selectTableUniqueKeyColumnMapByInfo(dataSource, catalog);
+            }
+        }
+
+        private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMapByInfo(DataSource dataSource, String catalog) {
+            Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
+            Map<List<String>, List<String>> cache = new HashMap<>();
+            Map<TableUniqueIndex, TableUniqueIndex> cache2 = new HashMap<>();
+            boolean isCatalog = catalog != null && !catalog.isEmpty();
+            String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT `TABLE_NAME`) TABLE_NAME, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = ? GROUP BY TABLE_NAME"
+                    : "SELECT GROUP_CONCAT(DISTINCT `TABLE_NAME`) TABLE_NAME, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE `COLUMN_KEY` = 'PRI' GROUP BY `TABLE_NAME`";
+            try (Connection connection = dataSource.getConnection();
+                 PreparedStatement statement = connection.prepareStatement(sql)) {
+                if (isCatalog) {
+                    statement.setObject(1, catalog);
+                }
+                try (ResultSet rs = statement.executeQuery()) {
+                    while (rs.next()) {
+                        String tableName = rs.getString(1);
+                        String columnName = rs.getString(2);
+
+                        List<String> uniqueKeyList = Arrays.asList(columnName.split(","));
+                        List<String> uniqueKeyListCache = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
+
+                        TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(uniqueKeyListCache);
+                        TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
+
+                        tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>(1))
+                                .add(tableUniqueIndexCache);
                     }
                 }
                 return tableUniqueKeyColumnMap;
@@ -269,9 +386,10 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             }
         }
 
-        private Map<String, List<String>> selectTableUniqueKeyColumnMapByShow(DataSource dataSource, String catalog) {
-            Map<String, List<String>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
+        private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMapByShow(DataSource dataSource, String catalog) {
+            Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
             Map<List<String>, List<String>> cache = new HashMap<>();
+            Map<TableUniqueIndex, TableUniqueIndex> cache2 = new HashMap<>();
             boolean isCatalog = catalog != null && !catalog.isEmpty();
             String sql = isCatalog ? "SHOW TABLE STATUS FROM " + catalog : "SHOW TABLE STATUS";
             try (Connection connection = dataSource.getConnection();
@@ -283,14 +401,20 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                     }
                     DatabaseMetaData metaData = rs.getStatement().getConnection().getMetaData();
                     for (String table : tableNameList) {
-                        List<String> primaryKeyList = new ArrayList<>();
+                        List<String> primaryKeyList = new ArrayList<>(1);
                         String catalogget = "".equals(catalog) ? null : catalog;
                         try (ResultSet primaryKeys = metaData.getPrimaryKeys(catalogget, catalogget, table)) {
                             while (primaryKeys.next()) {
                                 primaryKeyList.add(primaryKeys.getString("COLUMN_NAME"));
                             }
                         }
-                        tableUniqueKeyColumnMap.put(table, cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList));
+                        List<String> uniqueKeyListCache = cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList);
+
+                        TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(uniqueKeyListCache);
+                        TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
+
+                        tableUniqueKeyColumnMap.computeIfAbsent(table, e -> new ArrayList<>(1))
+                                .add(tableUniqueIndexCache);
                     }
                 }
             } catch (Exception ignored) {
@@ -304,8 +428,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     /**
      * table=col1,col2
      */
-    private static Map<String, List<String>> parseTableUniqueKeyColumnMap(List<String> list) {
-        Map<String, List<String>> map = new HashMap<>();
+    private static Map<String, List<TableUniqueIndex>> parseTableUniqueKeyColumnMap(List<String> list) {
+        Map<String, List<TableUniqueIndex>> map = new HashMap<>();
         for (String string : list) {
             String[] split = string.split("=", 2);
             if (split.length != 2) {
@@ -314,7 +438,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             String tableName = split[0].trim();
             String cols = split[1].trim();
             String[] colsArray = cols.split(",");
-            map.put(tableName, Arrays.stream(colsArray).map(String::trim).collect(Collectors.toList()));
+            map.put(tableName, new ArrayList<>(Collections.singletonList(new TableUniqueIndex(Arrays.stream(colsArray).map(String::trim).collect(Collectors.toList())))));
         }
         return map;
     }

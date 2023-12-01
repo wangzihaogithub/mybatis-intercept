@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 
 public class SQLCondition {
     public enum TypeEnum {
+        COMMA,
         WHERE,
         JOIN
     }
@@ -27,6 +28,10 @@ public class SQLCondition {
 
     public TypeEnum getType() {
         return type;
+    }
+
+    public boolean isTypeComma() {
+        return this.type == TypeEnum.COMMA;
     }
 
     public boolean isTypeWhere() {
@@ -61,38 +66,52 @@ public class SQLCondition {
         this.columnList = columnList;
     }
 
-    public boolean existUniqueKeyColumn(Map<String, List<String>> tableUniqueKeyColumnMap) {
-        return existUniqueKeyColumn(tableUniqueKeyColumnMap.get(getFromTableName()), isTypeWhere());
+    public boolean isCanIgnoreInject(Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap) {
+        if (isTypeWhere()) {
+            // 防止越权
+            return false;
+        } else {
+            return existUniqueKeyIndexColumn(tableUniqueKeyColumnMap.get(getFromTableName()));
+        }
     }
 
-    public boolean existUniqueKeyColumn(List<String> uniqueKeyColumnList, boolean andExistParameterized) {
+    public boolean existUniqueKeyColumn(Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap) {
+        return existUniqueKeyIndexColumn(tableUniqueKeyColumnMap.get(getFromTableName()));
+    }
+
+    /**
+     * 唯一键 = 任意
+     *
+     * @param indexList
+     * @return
+     */
+    public boolean existUniqueKeyIndexColumn(List<TableUniqueIndex> indexList) {
+        if (indexList == null || indexList.isEmpty()) {
+            return false;
+        }
+        for (TableUniqueIndex tableIndex : indexList) {
+            if (existUniqueKeyColumn(tableIndex.getColumnNameList())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean existUniqueKeyColumn(List<String> uniqueKeyColumnList) {
         if (uniqueKeyColumnList == null || uniqueKeyColumnList.isEmpty() || columnList.size() < uniqueKeyColumnList.size()) {
             return false;
         }
         boolean exist = false;
-        if (andExistParameterized) {
-            for (String uniqueKeyColumn : uniqueKeyColumnList) {
-                for (SQLColumn sqlColumn : columnList) {
-                    if (sqlColumn.exist(uniqueKeyColumn) && sqlColumn.existParameterized()) {
-                        exist = true;
-                        break;
-                    }
-                }
-                if (!exist) {
-                    return false;
+        for (String uniqueKeyColumn : uniqueKeyColumnList) {
+            for (SQLColumn sqlColumn : columnList) {
+                // 主键 = 任意
+                if (sqlColumn.exist(uniqueKeyColumn)) {
+                    exist = true;
+                    break;
                 }
             }
-        } else {
-            for (String uniqueKeyColumn : uniqueKeyColumnList) {
-                for (SQLColumn sqlColumn : columnList) {
-                    if (sqlColumn.exist(uniqueKeyColumn)) {
-                        exist = true;
-                        break;
-                    }
-                }
-                if (!exist) {
-                    return false;
-                }
+            if (!exist) {
+                return false;
             }
         }
         return true;

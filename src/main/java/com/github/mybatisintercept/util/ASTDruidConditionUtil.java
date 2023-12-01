@@ -53,9 +53,50 @@ public class ASTDruidConditionUtil {
         ALWAYS_APPEND
     }
 
+    public static List<String> getColumnList(String injectCondition) {
+        SQLExpr injectConditionExpr = SQLUtils.toSQLExpr(injectCondition, getDbType(null));
+        List<String> list = new ArrayList<>();
+        injectConditionExpr.accept(new SQLASTVisitorAdapter() {
+            boolean select;
+
+            @Override
+            public boolean visit(SQLSelectQueryBlock statement) {
+                select = true;
+                return true;
+            }
+
+            @Override
+            public void endVisit(SQLSelectQueryBlock x) {
+                select = false;
+            }
+
+            @Override
+            public boolean visit(SQLPropertyExpr x) {
+                if (!select) {
+                    String col = normalize(x.getName());
+                    list.add(col);
+                }
+                return true;
+            }
+
+            @Override
+            public boolean visit(SQLIdentifierExpr x) {
+                if (!select) {
+                    String col = normalize(x.getName());
+                    list.add(col);
+                }
+                return true;
+            }
+        });
+        return list;
+    }
+
     public static String addCondition(String sql, String injectCondition, SQLBinaryOperator op,
                                       boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
                                       String dbType, BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {
+        if (injectCondition == null || injectCondition.isEmpty()) {
+            return sql;
+        }
         List<SQLStatement> stmtList = SQLUtils.parseStatements(sql, dbType);
         if (stmtList.size() != 1) {
             throw new IllegalArgumentException("not support statement :" + sql);
@@ -63,10 +104,7 @@ public class ASTDruidConditionUtil {
         SQLStatement ast = stmtList.get(0);
 
         SQLExpr injectConditionExpr = SQLUtils.toSQLExpr(injectCondition, getDbType(dbType));
-        if (!(injectConditionExpr instanceof SQLBinaryOpExpr)) {
-            throw new IllegalArgumentException("no support injectCondition = " + injectCondition);
-        }
-        boolean change = addCondition(sql, ast, op, (SQLBinaryOpExpr) injectConditionExpr, appendConditionToLeft, existInjectConditionStrategyEnum, wrapDialectSkip(dbType, skip), isJoinUniqueKey);
+        boolean change = addCondition(sql, ast, op, injectConditionExpr, appendConditionToLeft, existInjectConditionStrategyEnum, wrapDialectSkip(dbType, skip), isJoinUniqueKey);
         if (change) {
             return SQLUtils.toSQLString(ast, dbType);
         } else {
@@ -290,12 +328,13 @@ public class ASTDruidConditionUtil {
         return exist[0];
     }
 
-    private static boolean addCondition(String sql, SQLStatement ast, SQLBinaryOperator op, SQLBinaryOpExpr injectCondition,
+    private static boolean addCondition(String sql, SQLStatement ast, SQLBinaryOperator op, SQLExpr injectCondition,
                                         boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
                                         BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {
         if (ast instanceof MySqlShowStatement || ast instanceof SQLSetStatement) {
             return false;
         }
+        injectCondition.accept(INJECT_MARK);
         List<SQLName> injectConditionColumnList;
         switch (existInjectConditionStrategyEnum) {
             case ANY_TABLE_MATCH_THEN_SKIP_SQL: {
@@ -352,23 +391,14 @@ public class ASTDruidConditionUtil {
             @Override
             public boolean visit(SQLSelectQueryBlock statement) {
                 select = true;
-                SQLTableSource from = statement.getFrom();
-                if (from == null || isSubqueryOrUnion(from)) {
-                    return true;
-                }
-                String tableSchema = getTableSchema(from);
-                String tableName = getTableName(from);
-                if (skip.test(tableSchema, tableName)) {
-                    return true;
-                }
-                if (addWhere(statement, getAlias(from), tableSchema, tableName)) {
-                    change[0] = true;
-                }
                 return true;
             }
 
-            private boolean addWhere(SQLSelectQueryBlock statement, String alias, String tableSchema, String tableName) {
+            private boolean addWhere(SQLSelectQueryBlock statement, String alias, String tableSchema, String tableName, SQLCondition.TypeEnum typeEnum) {
                 SQLExpr where = statement.getWhere();
+                if (isInjectCondition(where)) {
+                    return false;
+                }
                 // 1.规则跳过拼条件
                 if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
                         && existInjectCondition(injectConditionColumnList, alias, where)) {
@@ -378,7 +408,7 @@ public class ASTDruidConditionUtil {
                 if (isJoinUniqueKey != null) {
                     List<SQLColumn> joinUniqueKeyEqualityList = getJoinUniqueKeyEquality(where);
                     if (!joinUniqueKeyEqualityList.isEmpty()) {
-                        sqlJoin.reset(SQLCondition.TypeEnum.WHERE, alias, tableSchema, tableName, joinUniqueKeyEqualityList);
+                        sqlJoin.reset(typeEnum, alias, tableSchema, tableName, joinUniqueKeyEqualityList);
                         int parameterizedColumnCount = sqlJoin.getParameterizedColumnCount();
                         if (parameterizedColumnCount > 0 & isJoinUniqueKey.test(sqlJoin)) {
                             return false;
@@ -391,39 +421,57 @@ public class ASTDruidConditionUtil {
             }
 
             @Override
-            public void endVisit(SQLSelectQueryBlock x) {
-                select = false;
-            }
-
-            @Override
-            public boolean visit(SQLJoinTableSource statement) {
-                if (!isSelect()) {
-                    return true;
+            public void endVisit(SQLSelectQueryBlock statement) {
+                if (isInjectCondition(statement)) {
+                    return;
                 }
-                SQLTableSource from = statement.getRight();
+                SQLTableSource from = statement.getFrom();
                 if (from == null || isSubqueryOrUnion(from)) {
-                    return true;
+                    return;
                 }
                 String tableSchema = getTableSchema(from);
                 String tableName = getTableName(from);
                 if (skip.test(tableSchema, tableName)) {
-                    return true;
+                    return;
+                }
+                if (addWhere(statement, getAlias(from), tableSchema, tableName, SQLCondition.TypeEnum.WHERE)) {
+                    change[0] = true;
+                }
+                select = false;
+            }
+
+            @Override
+            public void endVisit(SQLJoinTableSource statement) {
+                if (!isSelect()) {
+                    return;
+                }
+                SQLTableSource from = statement.getRight();
+                if (from == null || isSubqueryOrUnion(from)) {
+                    return;
+                }
+                String tableSchema = getTableSchema(from);
+                String tableName = getTableName(from);
+                if (skip.test(tableSchema, tableName)) {
+                    return;
                 }
                 if (statement.getJoinType() == SQLJoinTableSource.JoinType.COMMA) {
                     // from table1,table2 where table1.id = table2.xx_id
                     SQLObject parent = statement.getParent();
-                    if (parent instanceof SQLSelectQueryBlock && addWhere((SQLSelectQueryBlock) parent, getAlias(from), tableSchema, tableName)) {
+                    if (parent instanceof SQLSelectQueryBlock && addWhere((SQLSelectQueryBlock) parent, getAlias(from), tableSchema, tableName, SQLCondition.TypeEnum.COMMA)) {
                         change[0] = true;
                     }
                 } else if (addJoin(statement, getAlias(from), tableSchema, tableName)) {
                     // on table1.id = table2.xx_id
                     change[0] = true;
                 }
-                return true;
             }
 
             private boolean addJoin(SQLJoinTableSource join, String alias, String tableSchema, String tableName) {
                 SQLExpr condition = join.getCondition();
+                if (isInjectCondition(condition)) {
+                    return false;
+                }
+
                 // 1.规则跳过拼条件
                 if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
                         && existInjectCondition(injectConditionColumnList, alias, condition)) {
@@ -554,6 +602,12 @@ public class ASTDruidConditionUtil {
             @Override
             public boolean visit(SQLDeleteStatement statement) {
                 delete = true;
+                return true;
+            }
+
+            @Override
+            public void endVisit(SQLDeleteStatement statement) {
+                delete = false;
 
                 LinkedList<SQLTableSource> temp = new LinkedList<>();
                 temp.add(statement.getTableSource());
@@ -575,21 +629,24 @@ public class ASTDruidConditionUtil {
                                 && existInjectCondition(injectConditionColumnList, alias, statement.getWhere())) {
                             continue;
                         }
+                        if (isInjectCondition(statement.getWhere())) {
+                            continue;
+                        }
                         statement.setWhere(mergeCondition(op, injectCondition, alias, appendConditionToLeft, statement.getWhere()));
                         change[0] = true;
                     }
                 }
-                return true;
-            }
-
-            @Override
-            public void endVisit(SQLDeleteStatement x) {
-                delete = false;
             }
 
             @Override
             public boolean visit(SQLUpdateStatement statement) {
                 update = true;
+                return true;
+            }
+
+            @Override
+            public void endVisit(SQLUpdateStatement statement) {
+                update = false;
 
                 LinkedList<SQLTableSource> temp = new LinkedList<>();
                 temp.add(statement.getTableSource());
@@ -611,16 +668,13 @@ public class ASTDruidConditionUtil {
                                 && existInjectCondition(injectConditionColumnList, alias, statement.getWhere())) {
                             continue;
                         }
+                        if (isInjectCondition(statement.getWhere())) {
+                            continue;
+                        }
                         statement.setWhere(mergeCondition(op, injectCondition, alias, appendConditionToLeft, statement.getWhere()));
                         change[0] = true;
                     }
                 }
-                return true;
-            }
-
-            @Override
-            public void endVisit(SQLUpdateStatement x) {
-                update = false;
             }
         });
         return change[0];
@@ -705,16 +759,18 @@ public class ASTDruidConditionUtil {
         return exist.length() == injectConditionColumnSize;
     }
 
-    private static SQLExpr mergeCondition(SQLBinaryOperator op, SQLBinaryOpExpr injectCondition, String alias, boolean left, SQLExpr where) {
-        SQLExpr injectConditionAlias = alias == null ?
-                injectCondition : newConditionIfExistAlias(injectCondition.getLeft(), injectCondition.getRight(), injectCondition.getOperator(), alias);
-        if (where == null) {
-            return injectConditionAlias;
-        }
-        if (left) {
-            return new SQLBinaryOpExpr(injectConditionAlias, op, where);
+    private static SQLExpr mergeCondition(SQLBinaryOperator op, SQLExpr injectCondition, String alias, boolean left, SQLExpr where) {
+        if (injectCondition instanceof SQLBinaryOpExpr) {
+            SQLBinaryOpExpr binaryOpExpr = ((SQLBinaryOpExpr) injectCondition);
+            SQLExpr injectConditionAlias = alias == null ?
+                    injectCondition : newConditionIfExistAlias(binaryOpExpr.getLeft(), binaryOpExpr.getRight(), binaryOpExpr.getOperator(), alias);
+            if (where == null) {
+                return injectConditionAlias;
+            }
+            return left ? new SQLBinaryOpExpr(injectConditionAlias, op, where) : new SQLBinaryOpExpr(where, op, injectConditionAlias);
         } else {
-            return new SQLBinaryOpExpr(where, op, injectConditionAlias);
+            return alias == null ?
+                    injectCondition : left ? newConditionIfExistAlias(injectCondition, where, op, alias) : newConditionIfExistAlias(where, injectCondition, op, alias);
         }
     }
 
@@ -728,7 +784,7 @@ public class ASTDruidConditionUtil {
             String simpleName = ((SQLName) left).getSimpleName();
             newLeft = new SQLPropertyExpr(conditionAlias, simpleName);
         } else {
-            newLeft = left.clone();
+            newLeft = left == null ? null : left.clone();
         }
         if (right instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr expr = (SQLBinaryOpExpr) right;
@@ -737,9 +793,20 @@ public class ASTDruidConditionUtil {
             String simpleName = ((SQLName) right).getSimpleName();
             newRight = new SQLPropertyExpr(conditionAlias, simpleName);
         } else {
-            newRight = right.clone();
+            newRight = right == null ? null : right.clone();
         }
-        return new SQLBinaryOpExpr(newLeft, operator, newRight);
+        SQLExpr binaryOpExpr;
+        if (newLeft == null) {
+            binaryOpExpr = newRight;
+        } else if (newRight == null) {
+            binaryOpExpr = newLeft;
+        } else {
+            binaryOpExpr = new SQLBinaryOpExpr(newLeft, operator, newRight);
+        }
+        if (binaryOpExpr != null) {
+            binaryOpExpr.accept(INJECT_MARK);
+        }
+        return binaryOpExpr;
     }
 
     public static <T> T getDbType(String type) {
@@ -751,5 +818,29 @@ public class ASTDruidConditionUtil {
         }
         return (T) type;
     }
+
+    private static final String INJECT_CONDITION_MARK_NAME = "inject";
+
+    private static boolean isInjectCondition(SQLObject injectCondition) {
+        return injectCondition != null && injectCondition.containsAttribute(INJECT_CONDITION_MARK_NAME);
+    }
+
+    private static final SQLASTVisitorAdapter INJECT_MARK = new SQLASTVisitorAdapter() {
+        @Override
+        public boolean visit(SQLBinaryOpExpr x) {
+            injectMark(x);
+            return true;
+        }
+
+        @Override
+        public boolean visit(SQLSelectQueryBlock x) {
+            injectMark(x);
+            return true;
+        }
+
+        private void injectMark(SQLObject sqlObject) {
+            sqlObject.putAttribute(INJECT_CONDITION_MARK_NAME, Boolean.TRUE);
+        }
+    };
 
 }
