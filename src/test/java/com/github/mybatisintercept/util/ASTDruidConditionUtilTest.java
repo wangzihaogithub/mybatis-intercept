@@ -63,6 +63,71 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+
+        String injectConditionNq = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
+                "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ");
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2\n" +
+                "\tON t1.dept_id = t2.id\n" +
+                "\t\tAND (t2.tenant_id = 1\n" +
+                "\t\t\tOR tenant_id IN (\n" +
+                "\t\t\t\tSELECT tenant_id\n" +
+                "\t\t\t\tFROM tenant_scope\n" +
+                "\t\t\t\tWHERE type = 1\n" +
+                "\t\t\t\t\tAND xx = ${x}\n" +
+                "\t\t\t))\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND (t1.tenant_id = 1\n" +
+                "\t\tOR tenant_id IN (\n" +
+                "\t\t\tSELECT tenant_id\n" +
+                "\t\t\tFROM tenant_scope\n" +
+                "\t\t\tWHERE type = 1\n" +
+                "\t\t\t\tAND xx = ${x}\n" +
+                "\t\t))", injectConditionNq);
+
+        String injectConditionNq2 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
+                "tenant_id =1 or tenant_id in (1) ");
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2\n" +
+                "\tON t1.dept_id = t2.id\n" +
+                "\t\tAND (t2.tenant_id = 1\n" +
+                "\t\t\tOR tenant_id IN (1))\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND (t1.tenant_id = 1\n" +
+                "\t\tOR tenant_id IN (1))", injectConditionNq2);
+
+        String injectConditionNq23 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
+                "tenant_id in (1,2) ");
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2\n" +
+                "\tON t2.dept_id = t2.id\n" +
+                "\t\tAND tenant_id IN (1, 2)\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND tenant_id IN (1, 2)", injectConditionNq23);
+
+        String injectConditionNq1 = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
+                "tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ");
+        Assert.assertEquals("SELECT t1.a, t2.b\n" +
+                "FROM user t1\n" +
+                "\tLEFT JOIN dept t2\n" +
+                "\tON t2.dept_id = t2.id\n" +
+                "\t\tAND tenant_id IN (\n" +
+                "\t\t\tSELECT tenant_id\n" +
+                "\t\t\tFROM tenant_scope\n" +
+                "\t\t\tWHERE type = 1\n" +
+                "\t\t\t\tAND xx = ${x}\n" +
+                "\t\t)\n" +
+                "WHERE t1.id = ?\n" +
+                "\tAND tenant_id IN (\n" +
+                "\t\tSELECT tenant_id\n" +
+                "\t\tFROM tenant_scope\n" +
+                "\t\tWHERE type = 1\n" +
+                "\t\t\tAND xx = ${x}\n" +
+                "\t)", injectConditionNq1);
+
         String bug1 = ASTDruidTestUtil.addAndCondition("SELECT\n" +
                         "\tbp.id AS positionId,\n" +
                         "\tbp.NAME AS positionName,\n" +
@@ -250,8 +315,8 @@ public class ASTDruidConditionUtilTest {
                 "\tAND a.rid = r.id\n" +
                 "\tAND a.is_delete = 0\n" +
                 "\tAND r.is_delete = 0\n" +
-                "\tAND a.tenant_id = 2\n" +
-                "\tAND r.tenant_id = 2", from);
+                "\tAND r.tenant_id = 2\n" +
+                "\tAND a.tenant_id = 2", from);
 
         String injectConditionN = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
                 "tenant_id = 2 and name like 'a' or b > 10");
