@@ -281,9 +281,9 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         private List<String> selectMissColumnTableList(DataSource dataSource, String catalog, Collection<String> columnNameList) {
             List<String> tableList = new ArrayList<>();
             int columnNameSize = columnNameList.size();
-            StringBuilder args = new StringBuilder();
+            StringJoiner args = new StringJoiner(",");
             for (int i = 0; i < columnNameSize; i++) {
-                args.append('?').append(',');
+                args.add("?");
             }
             boolean isCatalog = catalog != null && !catalog.isEmpty();
             String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME,COUNT(IF(COLUMN_NAME in (" + args + "),1,null)) CNT FROM INFORMATION_SCHEMA.`COLUMNS` WHERE TABLE_SCHEMA = ? GROUP BY TABLE_NAME HAVING CNT != ?"
