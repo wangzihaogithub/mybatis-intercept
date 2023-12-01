@@ -286,8 +286,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                 args.append('?').append(',');
             }
             boolean isCatalog = catalog != null && !catalog.isEmpty();
-            String sql = isCatalog ? "SELECT TABLE_NAME,COUNT(IF(COLUMN_NAME in (" + args + "),1,null)) cnt FROM INFORMATION_SCHEMA.`COLUMNS` WHERE TABLE_SCHEMA = ? GROUP BY TABLE_NAME HAVING cnt != ?"
-                    : "SELECT TABLE_NAME,COUNT(IF(COLUMN_NAME in (" + args + "),1,null)) cnt FROM INFORMATION_SCHEMA.`COLUMNS` GROUP BY TABLE_NAME HAVING cnt != ?";
+            String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME,COUNT(IF(COLUMN_NAME in (" + args + "),1,null)) CNT FROM INFORMATION_SCHEMA.`COLUMNS` WHERE TABLE_SCHEMA = ? GROUP BY TABLE_NAME HAVING CNT != ?"
+                    : "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME,COUNT(IF(COLUMN_NAME in (" + args + "),1,null)) CNT FROM INFORMATION_SCHEMA.`COLUMNS` GROUP BY TABLE_NAME HAVING CNT != ?";
             try (Connection connection = dataSource.getConnection();
                  PreparedStatement statement = connection.prepareStatement(sql)) {
                 int parameterIndex = 0;
@@ -316,8 +316,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
             Map<List<String>, List<String>> cache = new HashMap<>();
             boolean isCatalog = catalog != null && !catalog.isEmpty();
-            String sql = isCatalog ? "SELECT TABLE_NAME, COLUMN_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND NON_UNIQUE = 0"
-                    : "SELECT TABLE_NAME, COLUMN_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE NON_UNIQUE = 0";
+            String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME, GROUP_CONCAT(DISTINCT INDEX_NAME) INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND NON_UNIQUE = 0 GROUP BY TABLE_NAME,INDEX_NAME"
+                    : "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME, GROUP_CONCAT(DISTINCT INDEX_NAME) INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE NON_UNIQUE = 0 GROUP BY TABLE_NAME,INDEX_NAME";
             try (Connection connection = dataSource.getConnection();
                  PreparedStatement statement = connection.prepareStatement(sql)) {
                 if (isCatalog) {
@@ -346,8 +346,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
             Map<List<String>, List<String>> cache = new HashMap<>();
             boolean isCatalog = catalog != null && !catalog.isEmpty();
-            String sql = isCatalog ? "SELECT `TABLE_NAME`, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = ? GROUP BY TABLE_NAME"
-                    : "SELECT `TABLE_NAME`, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE `COLUMN_KEY` = 'PRI' GROUP BY `TABLE_NAME`";
+            String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT `TABLE_NAME`) TABLE_NAME, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = ? GROUP BY TABLE_NAME"
+                    : "SELECT GROUP_CONCAT(DISTINCT `TABLE_NAME`) TABLE_NAME, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE `COLUMN_KEY` = 'PRI' GROUP BY `TABLE_NAME`";
             try (Connection connection = dataSource.getConnection();
                  PreparedStatement statement = connection.prepareStatement(sql)) {
                 if (isCatalog) {
