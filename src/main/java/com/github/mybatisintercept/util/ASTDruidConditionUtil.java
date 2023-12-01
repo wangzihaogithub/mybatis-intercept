@@ -53,6 +53,27 @@ public class ASTDruidConditionUtil {
         ALWAYS_APPEND
     }
 
+    public static List<String> getColumnList(String injectCondition) {
+        SQLExpr injectConditionExpr = SQLUtils.toSQLExpr(injectCondition, getDbType(null));
+        List<String> list = new ArrayList<>();
+        injectConditionExpr.accept(new SQLASTVisitorAdapter() {
+            @Override
+            public boolean visit(SQLPropertyExpr x) {
+                String col = normalize(x.getName());
+                list.add(col);
+                return true;
+            }
+
+            @Override
+            public boolean visit(SQLIdentifierExpr x) {
+                String col = normalize(x.getName());
+                list.add(col);
+                return true;
+            }
+        });
+        return list;
+    }
+
     public static String addCondition(String sql, String injectCondition, SQLBinaryOperator op,
                                       boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
                                       String dbType, BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {

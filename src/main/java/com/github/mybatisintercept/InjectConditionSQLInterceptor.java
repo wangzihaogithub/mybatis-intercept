@@ -238,7 +238,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                 this.tableUniqueKeyColumnMap.putIfAbsent(entry.getKey(), entry.getValue());
             }
 
-            Set<String> missColumnTableList = selectMissColumnTableList(dataSources, conditionExpression.getArgNameAndDefaultValues().keySet());
+            Set<String> columnList = new LinkedHashSet<>(ASTDruidConditionUtil.getColumnList(conditionExpression.getExprSql()));
+            Set<String> missColumnTableList = selectMissColumnTableList(dataSources, columnList);
             this.skipTableNames.addAll(missColumnTableList);
         }
 
@@ -258,6 +259,9 @@ public class InjectConditionSQLInterceptor implements Interceptor {
 
         private Set<String> selectMissColumnTableList(Collection<DataSource> dataSources, Collection<String> columnNameList) {
             Set<String> tableList = new LinkedHashSet<>();
+            if (columnNameList == null || columnNameList.isEmpty()) {
+                return tableList;
+            }
             for (DataSource dataSource : dataSources) {
                 try {
                     String selectCatalog = getCatalog(dataSource);
