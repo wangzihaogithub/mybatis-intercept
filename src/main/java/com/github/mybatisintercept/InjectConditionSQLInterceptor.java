@@ -238,7 +238,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                 this.tableUniqueKeyColumnMap.putIfAbsent(entry.getKey(), entry.getValue());
             }
 
-            Set<String> columnList = new LinkedHashSet<>(ASTDruidConditionUtil.getColumnList(conditionExpression.getExprSql()));
+            SQL compile = SQL.compile(conditionExpression.getSourceSql(), e -> "?");
+            Set<String> columnList = new LinkedHashSet<>(ASTDruidConditionUtil.getColumnList(compile.getExprSql()));
             Set<String> missColumnTableList = selectMissColumnTableList(dataSources, columnList);
             this.skipTableNames.addAll(missColumnTableList);
         }
@@ -319,6 +320,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMapByStatistics(DataSource dataSource, String catalog) {
             Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
             Map<List<String>, List<String>> cache = new HashMap<>();
+            Map<TableUniqueIndex, TableUniqueIndex> cache2 = new HashMap<>();
             boolean isCatalog = catalog != null && !catalog.isEmpty();
             String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME, GROUP_CONCAT(DISTINCT INDEX_NAME) INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND NON_UNIQUE = 0 GROUP BY TABLE_NAME,INDEX_NAME"
                     : "SELECT GROUP_CONCAT(DISTINCT TABLE_NAME) TABLE_NAME, GROUP_CONCAT(COLUMN_NAME) COLUMN_NAME, GROUP_CONCAT(DISTINCT INDEX_NAME) INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE NON_UNIQUE = 0 GROUP BY TABLE_NAME,INDEX_NAME";
@@ -334,9 +336,13 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                         String indexName = rs.getString(3);
 
                         List<String> uniqueKeyList = Arrays.asList(columnName.split(","));
-                        List<String> list = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
-                        tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>())
-                                .add(new TableUniqueIndex(indexName, list));
+                        List<String> uniqueKeyListCache = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
+
+                        TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(indexName, uniqueKeyListCache);
+                        TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
+
+                        tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>(1))
+                                .add(tableUniqueIndexCache);
                     }
                 }
                 return tableUniqueKeyColumnMap;
@@ -349,6 +355,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMapByInfo(DataSource dataSource, String catalog) {
             Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
             Map<List<String>, List<String>> cache = new HashMap<>();
+            Map<TableUniqueIndex, TableUniqueIndex> cache2 = new HashMap<>();
             boolean isCatalog = catalog != null && !catalog.isEmpty();
             String sql = isCatalog ? "SELECT GROUP_CONCAT(DISTINCT `TABLE_NAME`) TABLE_NAME, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE COLUMN_KEY = 'PRI' AND TABLE_SCHEMA = ? GROUP BY TABLE_NAME"
                     : "SELECT GROUP_CONCAT(DISTINCT `TABLE_NAME`) TABLE_NAME, GROUP_CONCAT(`COLUMN_NAME`) COLUMN_NAME FROM INFORMATION_SCHEMA.`COLUMNS` WHERE `COLUMN_KEY` = 'PRI' GROUP BY `TABLE_NAME`";
@@ -363,9 +370,13 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                         String columnName = rs.getString(2);
 
                         List<String> uniqueKeyList = Arrays.asList(columnName.split(","));
-                        List<String> list = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
-                        tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>())
-                                .add(new TableUniqueIndex(list));
+                        List<String> uniqueKeyListCache = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
+
+                        TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(uniqueKeyListCache);
+                        TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
+
+                        tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>(1))
+                                .add(tableUniqueIndexCache);
                     }
                 }
                 return tableUniqueKeyColumnMap;
@@ -378,6 +389,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMapByShow(DataSource dataSource, String catalog) {
             Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = new LinkedHashMap<>();
             Map<List<String>, List<String>> cache = new HashMap<>();
+            Map<TableUniqueIndex, TableUniqueIndex> cache2 = new HashMap<>();
             boolean isCatalog = catalog != null && !catalog.isEmpty();
             String sql = isCatalog ? "SHOW TABLE STATUS FROM " + catalog : "SHOW TABLE STATUS";
             try (Connection connection = dataSource.getConnection();
@@ -389,16 +401,20 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                     }
                     DatabaseMetaData metaData = rs.getStatement().getConnection().getMetaData();
                     for (String table : tableNameList) {
-                        List<String> primaryKeyList = new ArrayList<>();
+                        List<String> primaryKeyList = new ArrayList<>(1);
                         String catalogget = "".equals(catalog) ? null : catalog;
                         try (ResultSet primaryKeys = metaData.getPrimaryKeys(catalogget, catalogget, table)) {
                             while (primaryKeys.next()) {
                                 primaryKeyList.add(primaryKeys.getString("COLUMN_NAME"));
                             }
                         }
-                        List<String> list = cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList);
-                        tableUniqueKeyColumnMap.computeIfAbsent(table, e -> new ArrayList<>())
-                                .add(new TableUniqueIndex(list));
+                        List<String> uniqueKeyListCache = cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList);
+
+                        TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(uniqueKeyListCache);
+                        TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
+
+                        tableUniqueKeyColumnMap.computeIfAbsent(table, e -> new ArrayList<>(1))
+                                .add(tableUniqueIndexCache);
                     }
                 }
             } catch (Exception ignored) {
