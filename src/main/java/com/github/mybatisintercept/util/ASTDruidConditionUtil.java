@@ -361,13 +361,13 @@ public class ASTDruidConditionUtil {
                 if (skip.test(tableSchema, tableName)) {
                     return true;
                 }
-                if (addWhere(statement, getAlias(from), tableSchema, tableName)) {
+                if (addWhere(statement, getAlias(from), tableSchema, tableName, SQLCondition.TypeEnum.WHERE)) {
                     change[0] = true;
                 }
                 return true;
             }
 
-            private boolean addWhere(SQLSelectQueryBlock statement, String alias, String tableSchema, String tableName) {
+            private boolean addWhere(SQLSelectQueryBlock statement, String alias, String tableSchema, String tableName, SQLCondition.TypeEnum typeEnum) {
                 SQLExpr where = statement.getWhere();
                 // 1.规则跳过拼条件
                 if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
@@ -378,7 +378,7 @@ public class ASTDruidConditionUtil {
                 if (isJoinUniqueKey != null) {
                     List<SQLColumn> joinUniqueKeyEqualityList = getJoinUniqueKeyEquality(where);
                     if (!joinUniqueKeyEqualityList.isEmpty()) {
-                        sqlJoin.reset(SQLCondition.TypeEnum.WHERE, alias, tableSchema, tableName, joinUniqueKeyEqualityList);
+                        sqlJoin.reset(typeEnum, alias, tableSchema, tableName, joinUniqueKeyEqualityList);
                         int parameterizedColumnCount = sqlJoin.getParameterizedColumnCount();
                         if (parameterizedColumnCount > 0 & isJoinUniqueKey.test(sqlJoin)) {
                             return false;
@@ -412,7 +412,7 @@ public class ASTDruidConditionUtil {
                 if (statement.getJoinType() == SQLJoinTableSource.JoinType.COMMA) {
                     // from table1,table2 where table1.id = table2.xx_id
                     SQLObject parent = statement.getParent();
-                    if (parent instanceof SQLSelectQueryBlock && addWhere((SQLSelectQueryBlock) parent, getAlias(from), tableSchema, tableName)) {
+                    if (parent instanceof SQLSelectQueryBlock && addWhere((SQLSelectQueryBlock) parent, getAlias(from), tableSchema, tableName, SQLCondition.TypeEnum.COMMA)) {
                         change[0] = true;
                     }
                 } else if (addJoin(statement, getAlias(from), tableSchema, tableName)) {

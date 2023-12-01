@@ -5,9 +5,9 @@ import org.junit.Test;
 
 import java.util.Collections;
 
-public class SQLTest {
+public class SQLCompileTest {
     public static void main(String[] args) {
-        SQLTest test = new SQLTest();
+        SQLCompileTest test = new SQLCompileTest();
         test.compile();
     }
 
@@ -15,6 +15,8 @@ public class SQLTest {
     public void compile() {
         SQL compile1 = SQL.compile("tenant_id = '${tenantId}'", Collections.singletonMap("tenantId", "1"));
         Assert.assertEquals("tenant_id = '1'", compile1.getExprSql());
+
+        Assert.assertEquals("compile1.getArgNameAndDefaultValues().size() == 1'", 1, compile1.getArgNameAndDefaultValues().size());
 
         SQL compile2 = SQL.compile("tenant_id = '${tenantId}' and id > ${id|2}", Collections.singletonMap("tenantId", "1"));
         Assert.assertEquals("tenant_id = '1' and id > 2", compile2.getExprSql());

@@ -91,6 +91,10 @@ public class SQLColumn implements Cloneable {
         return leftColumnValue != null || rightColumnValue != null;
     }
 
+    public boolean existVarRef() {
+        return leftColumnValue == VAR_REF || rightColumnValue == VAR_REF;
+    }
+
     @Override
     public String toString() {
         return "(" + leftToString() + " = " + rightToString() + ")";
