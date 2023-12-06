@@ -25,7 +25,7 @@ Mybatis拦截器 （可以用于租户隔离）
         <dependency>
             <groupId>com.github.wangzihaogithub</groupId>
             <artifactId>mybatis-intercept</artifactId>
-            <version>1.0.9-SNAPSHOT</version>
+            <version>1.0.9</version>
         </dependency>
         
 2.  配置 mybatis-config.xml
