@@ -234,7 +234,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                         @Override
                         public Exception onSelectException(Exception exception) {
                             if (datasourceSelectErrorThenShutdown) {
-                                System.exit(-1);
+                                PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
                             }
                             return new IllegalStateException("InjectConditionSQLInterceptor.uniqueKey. init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
                         }
