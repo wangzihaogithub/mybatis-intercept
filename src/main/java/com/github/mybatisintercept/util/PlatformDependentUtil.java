@@ -27,6 +27,10 @@ public class PlatformDependentUtil {
         EXIST_SPRING_BOOT = existSpringBoot;
     }
 
+    public static boolean isMysql(String dbType) {
+        return "mysql".equalsIgnoreCase(dbType) || "mariadb".equalsIgnoreCase(dbType);
+    }
+
     public static void onSpringDatasourceReady(Consumer<Collection<DataSource>> consumer) {
         if (SPRING_DATASOURCE_READY != null) {
             consumer.accept(SPRING_DATASOURCE_READY);
