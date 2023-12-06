@@ -1,7 +1,7 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.springboot.MysqlMissColumnDataSourceConsumer;
-import com.github.mybatisintercept.springboot.MysqlUniqueKeyDataSourceConsumer;
+import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
+import com.github.mybatisintercept.util.MysqlUniqueKeyDataSourceConsumer;
 import com.github.mybatisintercept.util.*;
 import org.apache.ibatis.cache.CacheKey;
 import org.apache.ibatis.executor.Executor;

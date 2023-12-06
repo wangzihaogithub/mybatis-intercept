@@ -1,7 +1,4 @@
-package com.github.mybatisintercept.springboot;
-
-import com.github.mybatisintercept.util.PlatformDependentUtil;
-import com.github.mybatisintercept.util.TableUniqueIndex;
+package com.github.mybatisintercept.util;
 
 import javax.sql.DataSource;
 import java.sql.*;

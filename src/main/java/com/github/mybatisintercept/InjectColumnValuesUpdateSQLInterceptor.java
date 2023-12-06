@@ -1,6 +1,6 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.springboot.MysqlMissColumnDataSourceConsumer;
+import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
 import com.github.mybatisintercept.util.*;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;

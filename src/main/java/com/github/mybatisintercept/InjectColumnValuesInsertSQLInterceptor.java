@@ -1,6 +1,6 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.springboot.MysqlMissColumnDataSourceConsumer;
+import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
 import com.github.mybatisintercept.util.ASTDruidUtil;
 import com.github.mybatisintercept.util.MybatisUtil;
 import com.github.mybatisintercept.util.PlatformDependentUtil;
