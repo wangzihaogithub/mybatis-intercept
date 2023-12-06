@@ -1,5 +1,6 @@
 package com.github.mybatisintercept.springboot;
 
+import com.github.mybatisintercept.util.PlatformDependentUtil;
 import com.github.mybatisintercept.util.TableUniqueIndex;
 
 import javax.sql.DataSource;
@@ -19,12 +20,23 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
         if (dataSources == null || dataSources.isEmpty()) {
             return;
         }
-        Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = selectTableUniqueKeyColumnMap(dataSources);
-        onSelectEnd(tableUniqueKeyColumnMap);
+        try {
+            Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = selectTableUniqueKeyColumnMap(dataSources);
+            onSelectEnd(tableUniqueKeyColumnMap);
+        } catch (Exception e) {
+            Exception exception = onSelectException(e);
+            if (exception != null) {
+                PlatformDependentUtil.sneakyThrows(exception);
+            }
+        }
     }
 
     public void onSelectEnd(Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap) {
 
+    }
+
+    public Exception onSelectException(Exception exception) {
+        return exception;
     }
 
     private Map<String, List<TableUniqueIndex>> selectTableUniqueKeyColumnMap(Collection<DataSource> dataSources) {
@@ -32,14 +44,10 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
         for (DataSource dataSource : dataSources) {
             Integer cacheKey = System.identityHashCode(dataSource);
             Map<String, List<TableUniqueIndex>> rowMap = TABLE_UNIQUE_KEY_COLUMN_MAP_CACHE.computeIfAbsent(cacheKey, k -> {
-                try {
-                    String selectCatalog = getCatalog(dataSource);
-                    Map<String, List<TableUniqueIndex>> m = selectTableUniqueKeyColumnMapByStatistics(dataSource, selectCatalog);
-                    compressReferenceAndUnmodifiable(m);
-                    return Collections.unmodifiableMap(m);
-                } catch (Exception ignored) {
-                    return Collections.emptyMap();
-                }
+                String selectCatalog = getCatalog(dataSource);
+                Map<String, List<TableUniqueIndex>> m = selectTableUniqueKeyColumnMapByStatistics(dataSource, selectCatalog);
+                compressReferenceAndUnmodifiable(m);
+                return Collections.unmodifiableMap(m);
             });
             map.putAll(rowMap);
         }
@@ -94,9 +102,14 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
                 }
             }
             return tableUniqueKeyColumnMap;
-        } catch (Exception ignored) {
+        } catch (Exception err) {
             // 1044 - Access denied for user
-            return selectTableUniqueKeyColumnMapByInfo(dataSource, catalog);
+            try {
+                return selectTableUniqueKeyColumnMapByInfo(dataSource, catalog);
+            } catch (Exception e) {
+                PlatformDependentUtil.sneakyThrows(err);
+                return Collections.emptyMap();
+            }
         }
     }
 
@@ -128,9 +141,14 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
                 }
             }
             return tableUniqueKeyColumnMap;
-        } catch (Exception ignored) {
+        } catch (Exception err) {
             // 1044 - Access denied for user
-            return selectTableUniqueKeyColumnMapByShow(dataSource, catalog);
+            try {
+                return selectTableUniqueKeyColumnMapByShow(dataSource, catalog);
+            } catch (Exception e) {
+                PlatformDependentUtil.sneakyThrows(err);
+                return Collections.emptyMap();
+            }
         }
     }
 
@@ -165,8 +183,8 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
                             .add(tableUniqueIndexCache);
                 }
             }
-        } catch (Exception ignored) {
-            // 1044 - Access denied for user
+        } catch (Exception e) {
+            PlatformDependentUtil.sneakyThrows(e);
         }
         return tableUniqueKeyColumnMap;
     }

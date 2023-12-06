@@ -189,10 +189,12 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         String conditionExpression = properties.getProperty("InjectConditionSQLInterceptor.conditionExpression", "tenant_id = ${tenantId}"); // 字符串请这样写： 字段 = '${属性}'
         String interceptPackageNames = properties.getProperty("InjectConditionSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectConditionSQLInterceptor.skipTableNames", "");
+        boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
+        boolean enabledDatasourceSelect = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.datasourceSelect", "true"));
+        boolean datasourceSelectErrorThenShutdown = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown", "true"));
 
         this.conditionExpression = SQL.compile(conditionExpression, Collections.emptyMap());
 
-        boolean enabledDatasourceSelect = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledDatasourceSelect", "true"));
         if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect) {
             if (PlatformDependentUtil.isMysql(dbType)) {
                 SQL compile = SQL.compile(conditionExpression, k -> "?");
@@ -202,11 +204,18 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                     public void onSelectEnd(Set<String> missColumnTableList) {
                         InjectConditionSQLInterceptor.this.skipTableNames.addAll(missColumnTableList);
                     }
+
+                    @Override
+                    public Exception onSelectException(Exception exception) {
+                        if (datasourceSelectErrorThenShutdown) {
+                            PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
+                        }
+                        return new IllegalStateException("InjectConditionSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                    }
                 });
             }
         }
 
-        boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
         if (enabledUniqueKey) {
             // uniqueKey解析格式：table1=col1,col2;table2=col3;table3=col5,col6
             String tableUniqueKeyColumn = properties.getProperty("InjectConditionSQLInterceptor.uniqueKey", "");
@@ -220,6 +229,14 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                             for (Map.Entry<String, List<TableUniqueIndex>> entry : tableUniqueKeyColumnMap.entrySet()) {
                                 InjectConditionSQLInterceptor.this.tableUniqueKeyColumnMap.putIfAbsent(entry.getKey(), entry.getValue());
                             }
+                        }
+
+                        @Override
+                        public Exception onSelectException(Exception exception) {
+                            if (datasourceSelectErrorThenShutdown) {
+                                System.exit(-1);
+                            }
+                            return new IllegalStateException("InjectConditionSQLInterceptor.uniqueKey. init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
                         }
                     });
                 }

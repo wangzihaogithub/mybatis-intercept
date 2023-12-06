@@ -31,17 +31,32 @@ public class MybatisInterceptAutoConfiguration {
 
             @Override
             public void run() {
-                Map<String, SelectUniqueKeyDatasourceProvider> datasourceProviderMap = beanFactory.getBeansOfType(SelectUniqueKeyDatasourceProvider.class, true, true);
                 List<DataSource> dataSourceList = new ArrayList<>();
-                for (SelectUniqueKeyDatasourceProvider provider : datasourceProviderMap.values()) {
-                    DataSource dataSource = provider.getDataSource();
-                    if (dataSource != null) {
-                        dataSourceList.add(dataSource);
+                try {
+                    Map<String, SelectUniqueKeyDatasourceProvider> datasourceProviderMap = beanFactory.getBeansOfType(SelectUniqueKeyDatasourceProvider.class, true, true);
+                    for (SelectUniqueKeyDatasourceProvider provider : datasourceProviderMap.values()) {
+                        DataSource dataSource = provider.getDataSource();
+                        if (dataSource != null) {
+                            dataSourceList.add(dataSource);
+                        }
                     }
+                    if (dataSourceList.isEmpty()) {
+                        Map<String, DataSource> dataSourceMap = beanFactory.getBeansOfType(DataSource.class, false, true);
+                        dataSourceList.addAll(dataSourceMap.values());
+                    }
+                } catch (Exception e) {
+                    if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationThread.class, "getDataSource error = {}", e.toString(), e)) {
+                        e.printStackTrace();
+                    }
+                    return;
                 }
-                if (dataSourceList.isEmpty()) {
-                    Map<String, DataSource> dataSourceMap = beanFactory.getBeansOfType(DataSource.class, false, true);
-                    dataSourceList.addAll(dataSourceMap.values());
+
+                try {
+                    PlatformDependentUtil.onSpringDatasourceReady(dataSourceList);
+                } catch (Exception e) {
+                    if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationThread.class, "onSpringDatasourceReady error = {}", e.toString(), e)) {
+                        e.printStackTrace();
+                    }
                 }
                 PlatformDependentUtil.onSpringDatasourceReady(dataSourceList);
             }

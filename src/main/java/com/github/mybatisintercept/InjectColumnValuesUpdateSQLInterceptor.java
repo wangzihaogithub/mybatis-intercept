@@ -102,6 +102,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         String interceptPackageNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.skipTableNames", "");
         boolean enabledDatasourceSelect = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.enabledDatasourceSelect", "true"));
+        boolean datasourceSelectErrorThenShutdown = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown", "true"));
 
         this.valueProvider = new StaticMethodAccessor<>(valueProvider);
         this.dbType = dbType;
@@ -126,6 +127,14 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
                     @Override
                     public void onSelectEnd(Set<String> missColumnTableList) {
                         InjectColumnValuesUpdateSQLInterceptor.this.skipTableNames.addAll(missColumnTableList);
+                    }
+
+                    @Override
+                    public Exception onSelectException(Exception exception) {
+                        if (datasourceSelectErrorThenShutdown) {
+                            PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
+                        }
+                        return new IllegalStateException("InjectColumnValuesUpdateSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
                     }
                 });
             }

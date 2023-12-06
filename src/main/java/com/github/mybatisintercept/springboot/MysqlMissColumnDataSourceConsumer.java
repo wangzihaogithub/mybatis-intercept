@@ -1,5 +1,7 @@
 package com.github.mybatisintercept.springboot;
 
+import com.github.mybatisintercept.util.PlatformDependentUtil;
+
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -29,12 +31,23 @@ public class MysqlMissColumnDataSourceConsumer implements Consumer<Collection<Da
         if (dataSources == null || dataSources.isEmpty()) {
             return;
         }
-        Set<String> missColumnTableList = selectMissColumnTableList(dataSources, columnList);
-        onSelectEnd(missColumnTableList);
+        try {
+            Set<String> missColumnTableList = selectMissColumnTableList(dataSources, columnList);
+            onSelectEnd(missColumnTableList);
+        } catch (Exception e) {
+            Exception exception = onSelectException(e);
+            if (exception != null) {
+                PlatformDependentUtil.sneakyThrows(exception);
+            }
+        }
     }
 
     public void onSelectEnd(Set<String> missColumnTableList) {
 
+    }
+
+    public Exception onSelectException(Exception exception) {
+        return exception;
     }
 
     private Set<String> selectMissColumnTableList(Collection<DataSource> dataSources, Collection<? extends Collection<String>> columnNameListList) {
@@ -43,14 +56,9 @@ public class MysqlMissColumnDataSourceConsumer implements Consumer<Collection<Da
             return tableList;
         }
         for (DataSource dataSource : dataSources) {
-            List<String> rowTableList;
-            try {
-                String selectCatalog = getCatalog(dataSource);
-                rowTableList = selectMissColumnTableList(dataSource, selectCatalog, columnNameListList);
-            } catch (Exception ignored) {
-                rowTableList = Collections.emptyList();
-            }
-            tableList.addAll(rowTableList);
+            String selectCatalog = getCatalog(dataSource);
+            List<String> itemTableList = selectMissColumnTableList(dataSource, selectCatalog, columnNameListList);
+            tableList.addAll(itemTableList);
         }
         return tableList;
     }
@@ -97,8 +105,8 @@ public class MysqlMissColumnDataSourceConsumer implements Consumer<Collection<Da
                             list.add(tableName);
                         }
                     }
-                } catch (Exception ignored) {
-                    // 1044 - Access denied for user
+                } catch (Exception err) {
+                    PlatformDependentUtil.sneakyThrows(err);
                 }
                 return Collections.unmodifiableSet(list);
             });

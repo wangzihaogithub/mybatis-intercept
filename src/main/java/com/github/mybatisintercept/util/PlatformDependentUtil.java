@@ -3,6 +3,7 @@ package com.github.mybatisintercept.util;
 import com.github.mybatisintercept.springboot.MybatisInterceptEnvironmentPostProcessor;
 
 import javax.sql.DataSource;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Properties;
@@ -14,6 +15,8 @@ public class PlatformDependentUtil {
     public static final boolean EXIST_SPRING_BOOT;
     private static final ArrayList<Runnable> onSpringEnvironmentReadyList = new ArrayList<>();
     private static final ArrayList<Consumer<Collection<DataSource>>> onSpringDatasourceReadyList = new ArrayList<>();
+    private static final Method METHOD_GET_LOGGER;
+    private static final Method METHOD_LOGGER_ERROR;
 
     static {
         boolean existSpringBoot;
@@ -25,6 +28,34 @@ public class PlatformDependentUtil {
             existSpringBoot = false;
         }
         EXIST_SPRING_BOOT = existSpringBoot;
+
+        Method loggerFactoryGetLogger;
+        Method loggerError;
+        try {
+            loggerFactoryGetLogger = Class.forName("org.slf4j.LoggerFactory").getDeclaredMethod("getLogger", Class.class);
+            loggerError = Class.forName("org.slf4j.Logger").getDeclaredMethod("error", String.class, Object[].class);
+        } catch (Throwable e) {
+            loggerFactoryGetLogger = null;
+            loggerError = null;
+        }
+        METHOD_GET_LOGGER = loggerFactoryGetLogger;
+        METHOD_LOGGER_ERROR = loggerError;
+    }
+
+    public static boolean logError(Class<?> clazz, String format, Object... args) {
+        if (METHOD_LOGGER_ERROR != null) {
+            try {
+                Object logger = METHOD_GET_LOGGER.invoke(null, clazz);
+                METHOD_LOGGER_ERROR.invoke(logger, format, args);
+                return true;
+            } catch (Exception ignored) {
+            }
+        }
+        return false;
+    }
+
+    public static <E extends Throwable> void sneakyThrows(Throwable t) throws E {
+        throw (E) t;
     }
 
     public static boolean isMysql(String dbType) {
@@ -40,13 +71,13 @@ public class PlatformDependentUtil {
     }
 
     public static void onSpringDatasourceReady(Collection<DataSource> dataSources) {
-        SPRING_DATASOURCE_READY = dataSources;
         ArrayList<Consumer<Collection<DataSource>>> consumers = new ArrayList<>(onSpringDatasourceReadyList);
         onSpringDatasourceReadyList.clear();
         onSpringDatasourceReadyList.trimToSize();
         for (Consumer<Collection<DataSource>> runnable : consumers) {
             runnable.accept(dataSources);
         }
+        SPRING_DATASOURCE_READY = dataSources;
     }
 
     public static void onSpringEnvironmentReady(Runnable runnable) {

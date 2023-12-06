@@ -11,19 +11,20 @@ public class StaticMethodAccessor<CONTEXT> implements Function<String, Object> {
     private static final ThreadLocal<Object> CONTEXT_THREAD_LOCAL = new ThreadLocal<>();
 
     public StaticMethodAccessor(String classMethodName) {
+        Method method = null;
         try {
             String[] split = classMethodName.split("#");
             Class<?> clazz = Class.forName(split[0]);
-            Method method = clazz.getDeclaredMethod(split[1], String.class);
+            method = clazz.getDeclaredMethod(split[1], String.class);
             method.setAccessible(true);
-            if (!Modifier.isStatic(method.getModifiers())) {
-                throw new IllegalArgumentException("must is static method. " + classMethodName);
-            }
-            this.classMethodName = classMethodName;
-            this.method = method;
         } catch (Exception e) {
-            throw sneakyThrows(e);
+            PlatformDependentUtil.sneakyThrows(e);
         }
+        if (!Modifier.isStatic(method.getModifiers())) {
+            throw new IllegalArgumentException("must is static method. " + classMethodName);
+        }
+        this.classMethodName = classMethodName;
+        this.method = method;
     }
 
     public static <T> T getContext(Class<T> type) {
@@ -49,17 +50,14 @@ public class StaticMethodAccessor<CONTEXT> implements Function<String, Object> {
         try {
             return method.invoke(null, name);
         } catch (IllegalAccessException | InvocationTargetException e) {
-            throw sneakyThrows(e);
+            PlatformDependentUtil.sneakyThrows(e);
+            return null;
         }
     }
 
     @Override
     public String toString() {
         return classMethodName;
-    }
-
-    private static RuntimeException sneakyThrows(Throwable throwable) {
-        return new RuntimeException(throwable);
     }
 
 }
