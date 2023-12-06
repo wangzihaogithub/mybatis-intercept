@@ -90,7 +90,8 @@ public class MybatisUtil {
         try {
             return Class.forName(mapperClassName);
         } catch (ClassNotFoundException e) {
-            throw sneakyThrows(e);
+            PlatformDependentUtil.sneakyThrows(e);
+            return null;
         }
     }
 
@@ -321,10 +322,6 @@ public class MybatisUtil {
     private static String substringBeforeLast(String str) {
         int pos = str.lastIndexOf(".");
         return pos == -1 ? str : str.substring(0, pos);
-    }
-
-    private static RuntimeException sneakyThrows(Throwable throwable) {
-        return new RuntimeException(throwable);
     }
 
     private static boolean putIfMiss(Map<String, Object> map, String name, Object value) {

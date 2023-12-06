@@ -1,5 +1,6 @@
 package com.github.mybatisintercept;
 
+import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
 import com.github.mybatisintercept.util.ASTDruidUtil;
 import com.github.mybatisintercept.util.MybatisUtil;
 import com.github.mybatisintercept.util.PlatformDependentUtil;
@@ -130,6 +131,8 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
         String columnMappings = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.columnMappings", "tenant_id=tenantId"); // tenant_id=tenantId,u_id=uId
         String interceptPackageNames = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectColumnValuesInsertSQLInterceptor.skipTableNames", "");
+        boolean enabledDatasourceSelect = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesInsertSQLInterceptor.enabledDatasourceSelect", "true"));
+        boolean datasourceSelectErrorThenShutdown = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown", "true"));
 
         this.valueProvider = new StaticMethodAccessor<>(valueProvider);
         this.dbType = dbType;
@@ -139,6 +142,28 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
         }
         if (skipTableNames.trim().length() > 0) {
             this.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
+        }
+
+        if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect) {
+            if (PlatformDependentUtil.isMysql(dbType)) {
+                List<String> columnList = this.columnMappings.stream()
+                        .map(e -> e.columnName)
+                        .collect(Collectors.toList());
+                PlatformDependentUtil.onSpringDatasourceReady(new MysqlMissColumnDataSourceConsumer(Collections.singletonList(columnList)) {
+                    @Override
+                    public void onSelectEnd(Set<String> missColumnTableList) {
+                        InjectColumnValuesInsertSQLInterceptor.this.skipTableNames.addAll(missColumnTableList);
+                    }
+
+                    @Override
+                    public Exception onSelectException(Exception exception) {
+                        if (datasourceSelectErrorThenShutdown) {
+                            PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
+                        }
+                        return new IllegalStateException("InjectColumnValuesInsertSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                    }
+                });
+            }
         }
     }
 

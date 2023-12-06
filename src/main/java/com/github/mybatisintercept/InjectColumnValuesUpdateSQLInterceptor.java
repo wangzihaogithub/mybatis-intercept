@@ -1,9 +1,7 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.util.ASTDruidUtil;
-import com.github.mybatisintercept.util.MybatisUtil;
-import com.github.mybatisintercept.util.PlatformDependentUtil;
-import com.github.mybatisintercept.util.StaticMethodAccessor;
+import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
+import com.github.mybatisintercept.util.*;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
@@ -13,6 +11,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 自动给（update语句）加字段属性值， 如果值为空
@@ -51,8 +50,8 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
     protected void addColumnValues(InterceptContext interceptContext) {
         BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
         for (ColumnMapping columnMapping : columnMappings) {
-            Object columnValue = valueProvider.invokeWithOnBindContext(columnMapping.getAttrName(), interceptContext);
-            MybatisUtil.invokeParameterObjectSetter(boundSql, columnMapping.getProperty(), columnValue);
+            Object columnValue = valueProvider.invokeWithOnBindContext(columnMapping.getValueProviderGetterPropertyName(), interceptContext);
+            MybatisUtil.invokeParameterObjectSetter(boundSql, columnMapping.getPersistentObjectSetterPropertyName(), columnValue);
         }
     }
 
@@ -64,7 +63,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
 
     protected boolean existColumnValue(InterceptContext interceptContext) {
         for (ColumnMapping item : columnMappings) {
-            Object value = valueProvider.invokeWithOnBindContext(item.getAttrName(), interceptContext);
+            Object value = valueProvider.invokeWithOnBindContext(item.getValueProviderGetterPropertyName(), interceptContext);
             if (value == null) {
                 return false;
             }
@@ -98,9 +97,12 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         }
         String valueProvider = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
         String dbType = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.dbType", "mysql");
+        // 格式：valueProviderGetterPropertyName=persistentObjectSetterPropertyName1,persistentObjectSetterPropertyName2
         String columnMappings = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.columnMappings", "tenantId=tenantId"); // tenantId=tenantId,tenantId
         String interceptPackageNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.skipTableNames", "");
+        boolean enabledDatasourceSelect = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.enabledDatasourceSelect", "true"));
+        boolean datasourceSelectErrorThenShutdown = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown", "true"));
 
         this.valueProvider = new StaticMethodAccessor<>(valueProvider);
         this.dbType = dbType;
@@ -110,6 +112,32 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         }
         if (skipTableNames.trim().length() > 0) {
             this.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
+        }
+
+        if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect) {
+            if (PlatformDependentUtil.isMysql(dbType)) {
+                Set<Set<String>> columnListList = new LinkedHashSet<>();
+                columnListList.add(this.columnMappings.stream()
+                        .flatMap(e -> Stream.of(TypeUtil.humpToLine(e.persistentObjectSetterPropertyName), TypeUtil.humpToLine(e.persistentObjectSetterPropertyName)))
+                        .collect(Collectors.toSet()));
+                columnListList.add(this.columnMappings.stream()
+                        .flatMap(e -> Stream.of(TypeUtil.lineToHump(e.persistentObjectSetterPropertyName), TypeUtil.lineToHump(e.persistentObjectSetterPropertyName)))
+                        .collect(Collectors.toSet()));
+                PlatformDependentUtil.onSpringDatasourceReady(new MysqlMissColumnDataSourceConsumer(columnListList) {
+                    @Override
+                    public void onSelectEnd(Set<String> missColumnTableList) {
+                        InjectColumnValuesUpdateSQLInterceptor.this.skipTableNames.addAll(missColumnTableList);
+                    }
+
+                    @Override
+                    public Exception onSelectException(Exception exception) {
+                        if (datasourceSelectErrorThenShutdown) {
+                            PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
+                        }
+                        return new IllegalStateException("InjectColumnValuesUpdateSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                    }
+                });
+            }
         }
     }
 
@@ -154,20 +182,20 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
     }
 
     public static class ColumnMapping {
-        private final String attrName;
-        private final String property;
+        private final String valueProviderGetterPropertyName;
+        private final String persistentObjectSetterPropertyName;
 
-        public ColumnMapping(String attrName, String property) {
-            this.attrName = attrName;
-            this.property = property;
+        public ColumnMapping(String valueProviderGetterPropertyName, String persistentObjectSetterPropertyName) {
+            this.valueProviderGetterPropertyName = valueProviderGetterPropertyName;
+            this.persistentObjectSetterPropertyName = persistentObjectSetterPropertyName;
         }
 
-        public String getAttrName() {
-            return attrName;
+        public String getValueProviderGetterPropertyName() {
+            return valueProviderGetterPropertyName;
         }
 
-        public String getProperty() {
-            return property;
+        public String getPersistentObjectSetterPropertyName() {
+            return persistentObjectSetterPropertyName;
         }
 
         @Override
@@ -179,17 +207,17 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
                 return false;
             }
             ColumnMapping that = (ColumnMapping) o;
-            return Objects.equals(property, that.property) && Objects.equals(attrName, that.attrName);
+            return Objects.equals(persistentObjectSetterPropertyName, that.persistentObjectSetterPropertyName) && Objects.equals(valueProviderGetterPropertyName, that.valueProviderGetterPropertyName);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(property, attrName);
+            return Objects.hash(persistentObjectSetterPropertyName, valueProviderGetterPropertyName);
         }
 
         @Override
         public String toString() {
-            return attrName + "=" + property;
+            return valueProviderGetterPropertyName + "=" + persistentObjectSetterPropertyName;
         }
 
         public static Set<ColumnMapping> parse(String str) {
