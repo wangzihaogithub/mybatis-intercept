@@ -53,5 +53,11 @@ public class ASTDruidTestUtil {
                 ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
     }
 
+    static String addAndConditionIgnoreUniqueKeyAlwaysAppend(String sql, String injectCondition, Map<String, List<String>> table) {
+        Map<String, List<TableUniqueIndex>> tableIndex = convert(table);
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
+                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.ALWAYS_APPEND, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
+    }
+
 
 }
