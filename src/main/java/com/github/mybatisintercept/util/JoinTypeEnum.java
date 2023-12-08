@@ -18,7 +18,7 @@ public enum JoinTypeEnum {
     CROSS_APPLY("CROSS APPLY"),
     UNKNOWN("UNKNOWN");
 
-    public final String code;
+    private final String code;
 
     JoinTypeEnum(String code) {
         this.code = code;
