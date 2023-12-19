@@ -387,18 +387,13 @@ public class InjectConditionSQLInterceptor implements Interceptor {
          * @return 编译后的SQL
          */
         default String compile(String conditionExpression, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
-            return DEFAULT.compile(conditionExpression, valueGetter, interceptContext);
+            return SQL.compileString(conditionExpression, valueGetter::getValue, true);
         }
 
         CompileConditionInjectSelector DEFAULT = new CompileConditionInjectSelector() {
             @Override
             public SQL select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
                 return conditionExpressionList.isEmpty() ? null : conditionExpressionList.get(0);
-            }
-
-            @Override
-            public String compile(String conditionExpression, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
-                return SQL.compileString(conditionExpression, valueGetter::getValue, true);
             }
         };
     }
