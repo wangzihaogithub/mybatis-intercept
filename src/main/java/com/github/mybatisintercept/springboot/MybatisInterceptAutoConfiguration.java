@@ -1,7 +1,9 @@
 package com.github.mybatisintercept.springboot;
 
+import com.github.mybatisintercept.InjectConditionSQLInterceptor;
 import com.github.mybatisintercept.util.PlatformDependentUtil;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.AutoConfigureOrder;
@@ -29,20 +31,34 @@ public class MybatisInterceptAutoConfiguration {
                 setPriority(Thread.MIN_PRIORITY);
             }
 
+            private <T> T getBean(Class<T> type) {
+                try {
+                    return beanFactory.getBean(type);
+                } catch (NoSuchBeanDefinitionException e) {
+                    return null;
+                }
+            }
+
             @Override
             public void run() {
+                InjectConditionSQLInterceptor.CompileConditionInjectSelector injectSelector = getBean(InjectConditionSQLInterceptor.CompileConditionInjectSelector.class);
+                if (injectSelector != null) {
+                    PlatformDependentUtil.onCompileInjectorReady(injectSelector);
+                }
+
                 List<DataSource> dataSourceList = new ArrayList<>();
                 try {
                     Map<String, SelectUniqueKeyDatasourceProvider> datasourceProviderMap = beanFactory.getBeansOfType(SelectUniqueKeyDatasourceProvider.class, true, true);
-                    for (SelectUniqueKeyDatasourceProvider provider : datasourceProviderMap.values()) {
-                        DataSource dataSource = provider.getDataSource();
-                        if (dataSource != null) {
-                            dataSourceList.add(dataSource);
-                        }
-                    }
-                    if (dataSourceList.isEmpty()) {
+                    if (datasourceProviderMap.isEmpty()) {
                         Map<String, DataSource> dataSourceMap = beanFactory.getBeansOfType(DataSource.class, false, true);
                         dataSourceList.addAll(dataSourceMap.values());
+                    } else {
+                        for (SelectUniqueKeyDatasourceProvider provider : datasourceProviderMap.values()) {
+                            DataSource dataSource = provider.getDataSource();
+                            if (dataSource != null) {
+                                dataSourceList.add(dataSource);
+                            }
+                        }
                     }
                 } catch (Exception e) {
                     if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationThread.class, "getDataSource error = {}", e.toString(), e)) {

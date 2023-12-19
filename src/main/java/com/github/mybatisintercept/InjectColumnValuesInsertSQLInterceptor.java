@@ -1,10 +1,6 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
-import com.github.mybatisintercept.util.ASTDruidUtil;
-import com.github.mybatisintercept.util.MybatisUtil;
-import com.github.mybatisintercept.util.PlatformDependentUtil;
-import com.github.mybatisintercept.util.StaticMethodAccessor;
+import com.github.mybatisintercept.util.*;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
@@ -270,6 +266,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
     public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectColumnValuesInsertSQLInterceptor> {
         private final Invocation invocation;
         private final InjectColumnValuesInsertSQLInterceptor interceptor;
+        private Map<String, Object> attributeMap;
 
         public InterceptContext(Invocation invocation, InjectColumnValuesInsertSQLInterceptor interceptor) {
             this.invocation = invocation;
@@ -286,5 +283,22 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
             return invocation;
         }
 
+        @Override
+        public Map<String, Object> getAttributeMap() {
+            if (attributeMap == null) {
+                attributeMap = new HashMap<>(2);
+            }
+            return attributeMap;
+        }
+
+        @Override
+        public Object getAttributeValue(String name) {
+            return attributeMap == null ? null : attributeMap.get(name);
+        }
+
+        @Override
+        public StaticMethodAccessor<com.github.mybatisintercept.InterceptContext<InjectColumnValuesInsertSQLInterceptor>> getValueProvider() {
+            return (StaticMethodAccessor) interceptor.valueProvider;
+        }
     }
 }

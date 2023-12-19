@@ -1,6 +1,5 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
 import com.github.mybatisintercept.util.*;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
@@ -243,6 +242,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
     public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectColumnValuesUpdateSQLInterceptor> {
         private final Invocation invocation;
         private final InjectColumnValuesUpdateSQLInterceptor interceptor;
+        private Map<String, Object> attributeMap;
 
         public InterceptContext(Invocation invocation, InjectColumnValuesUpdateSQLInterceptor interceptor) {
             this.invocation = invocation;
@@ -257,6 +257,24 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         @Override
         public Invocation getInvocation() {
             return invocation;
+        }
+
+        @Override
+        public Map<String, Object> getAttributeMap() {
+            if (attributeMap == null) {
+                attributeMap = new HashMap<>(2);
+            }
+            return attributeMap;
+        }
+
+        @Override
+        public Object getAttributeValue(String name) {
+            return attributeMap == null ? null : attributeMap.get(name);
+        }
+
+        @Override
+        public StaticMethodAccessor<com.github.mybatisintercept.InterceptContext<InjectColumnValuesUpdateSQLInterceptor>> getValueProvider() {
+            return (StaticMethodAccessor) interceptor.valueProvider;
         }
     }
 }

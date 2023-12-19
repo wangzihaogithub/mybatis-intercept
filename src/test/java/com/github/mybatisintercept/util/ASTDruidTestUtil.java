@@ -10,11 +10,11 @@ import java.util.function.BiPredicate;
 
 public class ASTDruidTestUtil {
 
-    static String addAndCondition(String sql, String injectCondition, ASTDruidConditionUtil.ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum, String dbType, BiPredicate<String, String> skip) {
+    static String addAndCondition(String sql, String injectCondition, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum, String dbType, BiPredicate<String, String> skip) {
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, existInjectConditionStrategyEnum, dbType, skip, null);
     }
 
-    static String addAndConditionIgnoreUniqueKey(String sql, String injectCondition, ASTDruidConditionUtil.ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum, String dbType, BiPredicate<String, String> skip, Map<String, List<String>> table) {
+    static String addAndConditionIgnoreUniqueKey(String sql, String injectCondition, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum, String dbType, BiPredicate<String, String> skip, Map<String, List<String>> table) {
         Map<String, List<TableUniqueIndex>> tableIndex = convert(table);
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, existInjectConditionStrategyEnum, dbType, skip, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
     }
@@ -25,12 +25,12 @@ public class ASTDruidTestUtil {
         return listMap;
     }
 
-    static String addAndCondition(String sql, String injectCondition, ASTDruidConditionUtil.ExistInjectConditionStrategyEnum strategyEnum) {
+    static String addAndCondition(String sql, String injectCondition, ExistInjectConditionStrategyEnum strategyEnum) {
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
                 strategyEnum, "mysql", null, null);
     }
 
-    static String addAndCondition(String sql, String injectCondition, ASTDruidConditionUtil.ExistInjectConditionStrategyEnum strategyEnum, Map<String, List<String>> table) {
+    static String addAndCondition(String sql, String injectCondition, ExistInjectConditionStrategyEnum strategyEnum, Map<String, List<String>> table) {
         Map<String, List<TableUniqueIndex>> tableIndex = convert(table);
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
                 strategyEnum, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
@@ -38,10 +38,10 @@ public class ASTDruidTestUtil {
 
     static String addAndCondition(String sql, String injectCondition) {
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
-                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL, "mysql", null, null);
+                ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL, "mysql", null, null);
     }
 
-    static String addAndConditionIgnoreUniqueKey(String sql, String injectCondition, ASTDruidConditionUtil.ExistInjectConditionStrategyEnum strategyEnum, Map<String, List<String>> table) {
+    static String addAndConditionIgnoreUniqueKey(String sql, String injectCondition, ExistInjectConditionStrategyEnum strategyEnum, Map<String, List<String>> table) {
         Map<String, List<TableUniqueIndex>> tableIndex = convert(table);
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
                 strategyEnum, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
@@ -50,13 +50,13 @@ public class ASTDruidTestUtil {
     static String addAndConditionIgnoreUniqueKey(String sql, String injectCondition, Map<String, List<String>> table) {
         Map<String, List<TableUniqueIndex>> tableIndex = convert(table);
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
-                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
+                ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
     }
 
     static String addAndConditionIgnoreUniqueKeyAlwaysAppend(String sql, String injectCondition, Map<String, List<String>> table) {
         Map<String, List<TableUniqueIndex>> tableIndex = convert(table);
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
-                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.ALWAYS_APPEND, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
+                ExistInjectConditionStrategyEnum.ALWAYS_APPEND, "mysql", null, sqlJoin -> sqlJoin.isCanIgnoreInject(tableIndex));
     }
 
 

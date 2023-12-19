@@ -134,6 +134,7 @@ public class InjectMapperParametersInterceptor implements Interceptor {
     public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectMapperParametersInterceptor> {
         private final Invocation invocation;
         private final InjectMapperParametersInterceptor interceptor;
+        private Map<String, Object> attributeMap;
 
         public InterceptContext(Invocation invocation, InjectMapperParametersInterceptor interceptor) {
             this.invocation = invocation;
@@ -150,5 +151,22 @@ public class InjectMapperParametersInterceptor implements Interceptor {
             return invocation;
         }
 
+        @Override
+        public Map<String, Object> getAttributeMap() {
+            if (attributeMap == null) {
+                attributeMap = new HashMap<>(2);
+            }
+            return attributeMap;
+        }
+
+        @Override
+        public Object getAttributeValue(String name) {
+            return attributeMap == null ? null : attributeMap.get(name);
+        }
+
+        @Override
+        public StaticMethodAccessor<com.github.mybatisintercept.InterceptContext<InjectMapperParametersInterceptor>> getValueProvider() {
+            return (StaticMethodAccessor) interceptor.valueProvider;
+        }
     }
 }

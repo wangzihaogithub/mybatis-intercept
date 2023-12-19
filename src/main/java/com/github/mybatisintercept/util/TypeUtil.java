@@ -635,8 +635,10 @@ public class TypeUtil {
      * @param <T>   类型
      * @return 转换后的对象
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public static <T> T cast(Object obj, Class<T> clazz) {
+        if (clazz == null || clazz == Object.class) {
+            return (T) obj;
+        }
         if (obj == null) {
             if (clazz == int.class) {
                 return (T) Integer.valueOf(0);
@@ -656,9 +658,9 @@ public class TypeUtil {
             return null;
         }
 
-        if (clazz == null) {
-            throw new IllegalArgumentException("clazz is null");
-        }
+//        if (clazz == null) {
+//            throw new IllegalArgumentException("clazz is null");
+//        }
 
         if (clazz == obj.getClass()) {
             return (T) obj;

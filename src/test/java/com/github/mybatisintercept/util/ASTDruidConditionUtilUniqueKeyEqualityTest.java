@@ -238,7 +238,7 @@ public class ASTDruidConditionUtilUniqueKeyEqualityTest {
                         "ORDER BY\n" +
                         "\tpi.create_time DESC \n" +
                         "\tLIMIT ?", "tenant_id = 2",
-                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM, table2);
+                ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM, table2);
 
         Assert.assertEquals("SELECT bp.id AS positionId, bp.NAME AS positionName\n" +
                 "\t, (\n" +
@@ -317,7 +317,7 @@ public class ASTDruidConditionUtilUniqueKeyEqualityTest {
                         "          and a.is_delete = 0\n" +
                         "          and a.hot_flag = 1\n" +
                         "        ORDER BY a.pinyin", "tenant_id = 2",
-                ASTDruidConditionUtil.ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL,
+                ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL,
                 "mysql",
                 (s, t) -> {
                     return t.equals("base_area");

@@ -28,6 +28,16 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
         }
     }
 
+    public static class SelectTableUniqueIndex extends TableUniqueIndex{
+        public SelectTableUniqueIndex(List<String> columnNameList) {
+            super(columnNameList);
+        }
+
+        public SelectTableUniqueIndex(String indexName, List<String> columnNameList) {
+            super(indexName, columnNameList);
+        }
+    }
+
     public void onSelectEnd(Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap) {
 
     }
@@ -91,7 +101,7 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
                     List<String> uniqueKeyList = Arrays.asList(columnName.split(","));
                     List<String> uniqueKeyListCache = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
 
-                    TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(indexName, uniqueKeyListCache);
+                    TableUniqueIndex tableUniqueIndex = new SelectTableUniqueIndex(indexName, uniqueKeyListCache);
                     TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
 
                     tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>(1))
@@ -130,7 +140,7 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
                     List<String> uniqueKeyList = Arrays.asList(columnName.split(","));
                     List<String> uniqueKeyListCache = cache.computeIfAbsent(uniqueKeyList, e -> uniqueKeyList);
 
-                    TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(uniqueKeyListCache);
+                    TableUniqueIndex tableUniqueIndex = new SelectTableUniqueIndex(uniqueKeyListCache);
                     TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
 
                     tableUniqueKeyColumnMap.computeIfAbsent(tableName, e -> new ArrayList<>(1))
@@ -173,7 +183,7 @@ public class MysqlUniqueKeyDataSourceConsumer implements Consumer<Collection<Dat
                     }
                     List<String> uniqueKeyListCache = cache.computeIfAbsent(primaryKeyList, e -> primaryKeyList);
 
-                    TableUniqueIndex tableUniqueIndex = new TableUniqueIndex(uniqueKeyListCache);
+                    TableUniqueIndex tableUniqueIndex = new SelectTableUniqueIndex(uniqueKeyListCache);
                     TableUniqueIndex tableUniqueIndexCache = cache2.computeIfAbsent(tableUniqueIndex, e -> tableUniqueIndex);
 
                     tableUniqueKeyColumnMap.computeIfAbsent(table, e -> new ArrayList<>(1))

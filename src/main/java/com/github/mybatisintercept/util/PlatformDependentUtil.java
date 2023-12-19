@@ -1,5 +1,6 @@
 package com.github.mybatisintercept.util;
 
+import com.github.mybatisintercept.InjectConditionSQLInterceptor;
 import com.github.mybatisintercept.springboot.MybatisInterceptEnvironmentPostProcessor;
 
 import javax.sql.DataSource;
@@ -11,8 +12,10 @@ import java.util.function.Consumer;
 
 public class PlatformDependentUtil {
     public static boolean SPRING_ENVIRONMENT_READY;
-    private static Collection<DataSource> SPRING_DATASOURCE_READY;
     public static final boolean EXIST_SPRING_BOOT;
+    private static Collection<DataSource> SPRING_DATASOURCE_READY;
+    private static InjectConditionSQLInterceptor.CompileConditionInjectSelector COMPILE_INJECTOR_SELECTOR;
+    private static final ArrayList<Consumer<InjectConditionSQLInterceptor.CompileConditionInjectSelector>> onCompileInjectorSelectorReadyList = new ArrayList<>();
     private static final ArrayList<Runnable> onSpringEnvironmentReadyList = new ArrayList<>();
     private static final ArrayList<Consumer<Collection<DataSource>>> onSpringDatasourceReadyList = new ArrayList<>();
     private static final Method METHOD_GET_LOGGER;
@@ -67,6 +70,24 @@ public class PlatformDependentUtil {
             consumer.accept(SPRING_DATASOURCE_READY);
         } else {
             onSpringDatasourceReadyList.add(consumer);
+        }
+    }
+
+    public static void onCompileInjectorReady(InjectConditionSQLInterceptor.CompileConditionInjectSelector injectSelector) {
+        ArrayList<Consumer<InjectConditionSQLInterceptor.CompileConditionInjectSelector>> consumers = new ArrayList<>(onCompileInjectorSelectorReadyList);
+        onCompileInjectorSelectorReadyList.clear();
+        onCompileInjectorSelectorReadyList.trimToSize();
+        for (Consumer<InjectConditionSQLInterceptor.CompileConditionInjectSelector> runnable : consumers) {
+            runnable.accept(injectSelector);
+        }
+        COMPILE_INJECTOR_SELECTOR = injectSelector;
+    }
+
+    public static void onCompileInjectorReady(Consumer<InjectConditionSQLInterceptor.CompileConditionInjectSelector> consumer) {
+        if (COMPILE_INJECTOR_SELECTOR != null) {
+            consumer.accept(COMPILE_INJECTOR_SELECTOR);
+        } else {
+            onCompileInjectorSelectorReadyList.add(consumer);
         }
     }
 
