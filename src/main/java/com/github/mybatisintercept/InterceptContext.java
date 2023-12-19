@@ -38,11 +38,17 @@ public interface InterceptContext<INTERCEPTOR extends Interceptor> {
 
     Map<String, Object> getAttributeMap();
 
+    default Object putAttributeValue(String name, Object value) {
+        return getAttributeMap().put(name, value);
+    }
+
     Object getAttributeValue(String name);
 
     StaticMethodAccessor<InterceptContext<INTERCEPTOR>> getValueProvider();
 
     interface ValueGetter {
+        Object getValue(String name);
+
         <T> T getValue(String name, Class<T> type);
 
         <T> T getProviderValue(String name, Class<T> type);
@@ -71,7 +77,7 @@ public interface InterceptContext<INTERCEPTOR extends Interceptor> {
                 if (parameter == null) {
                     parameter = BeanMap.toMap(getParameter());
                 }
-                Object value = parameter.get(name);
+                Object value = parameter.containsKey(name)? parameter.get(name) : null;
                 return cast(value, type);
             }
 
@@ -79,6 +85,11 @@ public interface InterceptContext<INTERCEPTOR extends Interceptor> {
             public <T> T getInterceptAttributeValue(String name, Class<T> type) {
                 Object value = getAttributeValue(name);
                 return cast(value, type);
+            }
+
+            @Override
+            public Object getValue(String name) {
+                return getValue(name, null);
             }
 
             @Override

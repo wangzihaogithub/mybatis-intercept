@@ -358,13 +358,13 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
 
         default String compileInject(InterceptContext interceptContext) {
-            Function<String, Object> getter = name -> interceptContext.getInterceptor().getValueProvider().invokeWithOnBindContext(name, interceptContext);
-            SQL conditionExpression = select(interceptContext.getInterceptor().getConditionExpressionList(), getter, interceptContext);
+            com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter = interceptContext.getValueGetter();
+            SQL conditionExpression = select(interceptContext.getInterceptor().getConditionExpressionList(), valueGetter, interceptContext);
             if (conditionExpression == null) {
                 return null;
             } else {
                 interceptContext.setConditionExpression(conditionExpression);
-                return compile(conditionExpression.getSourceSql(), getter, interceptContext);
+                return compile(conditionExpression.getSourceSql(), valueGetter, interceptContext);
             }
         }
 
@@ -372,33 +372,33 @@ public class InjectConditionSQLInterceptor implements Interceptor {
          * 选择一条SQL模板
          *
          * @param conditionExpressionList 表达式sql集合
-         * @param valueProvider           表达式值
+         * @param valueGetter             表达式值
          * @param interceptContext        上下文
          * @return 选中一条SQL模板
          */
-        SQL select(List<SQL> conditionExpressionList, Function<String, Object> valueProvider, InterceptContext interceptContext);
+        SQL select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext);
 
         /**
          * 编译
          *
          * @param conditionExpression 表达式sql
-         * @param valueProvider       表达式值
+         * @param valueGetter         表达式值
          * @param interceptContext    上下文
          * @return 编译后的SQL
          */
-        default String compile(String conditionExpression, Function<String, Object> valueProvider, InterceptContext interceptContext) {
-            return DEFAULT.compile(conditionExpression, valueProvider, interceptContext);
+        default String compile(String conditionExpression, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
+            return DEFAULT.compile(conditionExpression, valueGetter, interceptContext);
         }
 
         CompileConditionInjectSelector DEFAULT = new CompileConditionInjectSelector() {
             @Override
-            public SQL select(List<SQL> conditionExpressionList, Function<String, Object> valueProvider, InterceptContext interceptContext) {
+            public SQL select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
                 return conditionExpressionList.isEmpty() ? null : conditionExpressionList.get(0);
             }
 
             @Override
-            public String compile(String conditionExpression, Function<String, Object> valueProvider, InterceptContext interceptContext) {
-                return SQL.compileString(conditionExpression, valueProvider, true);
+            public String compile(String conditionExpression, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
+                return SQL.compileString(conditionExpression, valueGetter::getValue, true);
             }
         };
     }
