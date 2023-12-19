@@ -314,7 +314,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
 
         private BiPredicate<String, String> getSkipPredicate() {
-            BiPredicate<String, String> biPredicate = logicalOr(getConditionSkipPredicate(), interceptor.defaultSkipTablePredicate);
+            BiPredicate<String, String> biPredicate = new LogicalOr(getConditionSkipPredicate(), interceptor.defaultSkipTablePredicate);
             return skipPredicateWrapper != null ? skipPredicateWrapper.apply(biPredicate) : biPredicate;
         }
 
@@ -429,14 +429,21 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
     }
 
-    private static BiPredicate<String, String> logicalOr(BiPredicate<String, String>... biPredicates) {
-        return (s, s2) -> {
-            for (BiPredicate<String, String> biPredicate : biPredicates) {
+    private static class LogicalOr implements BiPredicate<String, String> {
+        private final BiPredicate<String, String>[] predicates;
+
+        private LogicalOr(BiPredicate<String, String>... predicates) {
+            this.predicates = predicates;
+        }
+
+        @Override
+        public boolean test(String s, String s2) {
+            for (BiPredicate<String, String> biPredicate : predicates) {
                 if (biPredicate != null && biPredicate.test(s, s2)) {
                     return true;
                 }
             }
             return false;
-        };
+        }
     }
 }

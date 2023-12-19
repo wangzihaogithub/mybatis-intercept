@@ -148,14 +148,26 @@ public class MybatisUtil {
         invocation.getArgs()[INDEX_PARAMETER] = parameter;
     }
 
-    public static void setParameterValue(Invocation invocation, String name, Object value) {
-        Object parameter = getParameter(invocation);
+    public static boolean isInstanceofKeyValue(Object parameter) {
         if (parameter == null) {
             // skip null
+            return false;
         } else if (isBasicType(parameter)) {
             // skip 基本类型
+            return false;
         } else if (parameter instanceof Collection) {
-            // skip Collection
+            // skip 集合
+            return false;
+        } else {
+            // bean 或 MapperMethod.ParamMap 或 map
+            return true;
+        }
+    }
+
+    public static void setParameterValue(Invocation invocation, String name, Object value) {
+        Object parameter = getParameter(invocation);
+        if (!isInstanceofKeyValue(parameter)) {
+            // skip 不支持key value的
         } else if (parameter instanceof MapperMethod.ParamMap) {
             // ParamMap
             Map<String, Object> paramMap = ((MapperMethod.ParamMap) parameter);
