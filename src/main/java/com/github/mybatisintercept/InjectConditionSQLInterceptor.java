@@ -13,8 +13,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiPredicate;
-import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 /**
@@ -50,9 +50,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     private String dbType;
     private ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum;
     private StaticMethodAccessor<InterceptContext> valueProvider;
-    private Predicate<SQLCondition> uniqueKeyPredicate = sqlCondition -> {
-        return sqlCondition.isCanIgnoreInject(tableUniqueKeyColumnMap);
-    };
+    private Predicate<SQLCondition> uniqueKeyPredicate = sqlCondition -> sqlCondition.isCanIgnoreInject(tableUniqueKeyColumnMap);
     private CompileConditionInjectSelector compileConditionInjectSelector = CompileConditionInjectSelector.DEFAULT;
     private Properties properties;
 
@@ -88,6 +86,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                         if (!Objects.equals(rawSql, newSql)) {
                             // 5. rewriteSql
                             MybatisUtil.rewriteSql(invocation, newSql);
+                            break;
                         }
                     }
                     interceptContext.next();
@@ -166,23 +165,28 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
     }
 
+    private Properties getProperties(){
+        Properties result = this.properties;
+        if (result == null || result.isEmpty()) {
+            result = System.getProperties();
+        }
+        if (PlatformDependentUtil.SPRING_ENVIRONMENT_READY) {
+            result = PlatformDependentUtil.resolveSpringPlaceholders(result, "InjectConditionSQLInterceptor.");
+        }
+        return result;
+    }
+
     public void initIfNeed() {
         if (!initFlag.compareAndSet(false, true)) {
             return;
         }
-        Properties properties = this.properties;
-        if (properties == null || properties.isEmpty()) {
-            properties = System.getProperties();
-        }
-        if (PlatformDependentUtil.SPRING_ENVIRONMENT_READY) {
-            properties = PlatformDependentUtil.resolveSpringPlaceholders(properties, "InjectConditionSQLInterceptor.");
-        }
-        String valueProvider = properties.getProperty("InjectConditionSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
-        String dbType = properties.getProperty("InjectConditionSQLInterceptor.dbType", "mysql");
-        String existInjectConditionStrategyEnum = properties.getProperty("InjectConditionSQLInterceptor.existInjectConditionStrategyEnum", "RULE_TABLE_MATCH_THEN_SKIP_ITEM");
+        Properties properties = getProperties();
+        String valueProviderString = properties.getProperty("InjectConditionSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
+        String dbTypeString = properties.getProperty("InjectConditionSQLInterceptor.dbType", "mysql");
+        String existInjectConditionStrategyEnumString = properties.getProperty("InjectConditionSQLInterceptor.existInjectConditionStrategyEnum", "RULE_TABLE_MATCH_THEN_SKIP_ITEM");
 
         String[] conditionExpressions = filterEmpty(properties.getProperty("InjectConditionSQLInterceptor.conditionExpression", "tenant_id = ${tenantId}").split(";")); // 字符串请这样写： 字段 = '${属性}'
-        String interceptPackageNames = properties.getProperty("InjectConditionSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
+        String interceptPackageNamesString = properties.getProperty("InjectConditionSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectConditionSQLInterceptor.skipTableNames", "");
         boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
         boolean enabledDatasourceSelect = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.datasourceSelect", "true"));
@@ -190,28 +194,26 @@ public class InjectConditionSQLInterceptor implements Interceptor {
 
         this.conditionExpressionList.addAll(Arrays.stream(conditionExpressions).map(e -> SQL.compile(e, Collections.emptyMap())).collect(Collectors.toList()));
 
-        if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect) {
-            if (PlatformDependentUtil.isMysql(dbType)) {
-                for (String conditionExpression : conditionExpressions) {
-                    SQL compile = SQL.compile(conditionExpression, k -> "?");
-                    List<String> columnList = ASTDruidConditionUtil.getColumnList(compile.getExprSql());
-                    PlatformDependentUtil.onSpringDatasourceReady(new MysqlMissColumnDataSourceConsumer(Collections.singletonList(columnList)) {
-                        @Override
-                        public void onSelectEnd(Set<String> missColumnTableList) {
-                            ConditionSkipTablePredicate predicate = new ConditionSkipTablePredicate(conditionExpression, columnList);
-                            predicate.getSkipTableNames().addAll(missColumnTableList);
-                            InjectConditionSQLInterceptor.this.skipTablePredicateMap.put(conditionExpression, predicate);
-                        }
+        if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect && PlatformDependentUtil.isMysql(dbTypeString)) {
+            for (String conditionExpression : conditionExpressions) {
+                SQL compile = SQL.compile(conditionExpression, k -> "?");
+                List<String> columnList = ASTDruidConditionUtil.getColumnList(compile.getExprSql());
+                PlatformDependentUtil.onSpringDatasourceReady(new MysqlMissColumnDataSourceConsumer(Collections.singletonList(columnList)) {
+                    @Override
+                    public void onSelectEnd(Set<String> missColumnTableList) {
+                        ConditionSkipTablePredicate predicate = new ConditionSkipTablePredicate(conditionExpression, columnList);
+                        predicate.getSkipTableNames().addAll(missColumnTableList);
+                        InjectConditionSQLInterceptor.this.skipTablePredicateMap.put(conditionExpression, predicate);
+                    }
 
-                        @Override
-                        public Exception onSelectException(Exception exception) {
-                            if (datasourceSelectErrorThenShutdown) {
-                                PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
-                            }
-                            return new IllegalStateException("InjectConditionSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                    @Override
+                    public Exception onSelectException(Exception exception) {
+                        if (datasourceSelectErrorThenShutdown) {
+                            PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
                         }
-                    });
-                }
+                        return new IllegalStateException("InjectConditionSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                    }
+                });
             }
         }
 
@@ -220,25 +222,23 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             String tableUniqueKeyColumn = properties.getProperty("InjectConditionSQLInterceptor.uniqueKey", "");
             this.tableUniqueKeyColumnMap.putAll(parseTableUniqueKeyColumnMap(Arrays.asList(tableUniqueKeyColumn.split(";"))));
 
-            if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect) {
-                if (PlatformDependentUtil.isMysql(dbType)) {
-                    PlatformDependentUtil.onSpringDatasourceReady(new MysqlUniqueKeyDataSourceConsumer() {
-                        @Override
-                        public void onSelectEnd(Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap) {
-                            for (Map.Entry<String, List<TableUniqueIndex>> entry : tableUniqueKeyColumnMap.entrySet()) {
-                                InjectConditionSQLInterceptor.this.tableUniqueKeyColumnMap.putIfAbsent(entry.getKey(), entry.getValue());
-                            }
+            if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect && PlatformDependentUtil.isMysql(dbTypeString)) {
+                PlatformDependentUtil.onSpringDatasourceReady(new MysqlUniqueKeyDataSourceConsumer() {
+                    @Override
+                    public void onSelectEnd(Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap) {
+                        for (Map.Entry<String, List<TableUniqueIndex>> entry : tableUniqueKeyColumnMap.entrySet()) {
+                            InjectConditionSQLInterceptor.this.tableUniqueKeyColumnMap.putIfAbsent(entry.getKey(), entry.getValue());
                         }
+                    }
 
-                        @Override
-                        public Exception onSelectException(Exception exception) {
-                            if (datasourceSelectErrorThenShutdown) {
-                                PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
-                            }
-                            return new IllegalStateException("InjectConditionSQLInterceptor.uniqueKey. init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                    @Override
+                    public Exception onSelectException(Exception exception) {
+                        if (datasourceSelectErrorThenShutdown) {
+                            PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
                         }
-                    });
-                }
+                        return new IllegalStateException("InjectConditionSQLInterceptor.uniqueKey. init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                    }
+                });
             }
         }
 
@@ -247,11 +247,11 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             e.init(this);
         });
 
-        this.valueProvider = new StaticMethodAccessor<>(valueProvider);
-        this.dbType = dbType;
-        this.existInjectConditionStrategyEnum = ExistInjectConditionStrategyEnum.valueOf(existInjectConditionStrategyEnum);
-        if (interceptPackageNames.trim().length() > 0) {
-            this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
+        this.valueProvider = new StaticMethodAccessor<>(valueProviderString);
+        this.dbType = dbTypeString;
+        this.existInjectConditionStrategyEnum = ExistInjectConditionStrategyEnum.valueOf(existInjectConditionStrategyEnumString);
+        if (interceptPackageNamesString.trim().length() > 0) {
+            this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNamesString.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
         if (skipTableNames.trim().length() > 0) {
             this.defaultSkipTablePredicate.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).filter(e -> !e.isEmpty()).collect(Collectors.toList()));
@@ -295,7 +295,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         private int conditionExpressionIndex;
         private Map<String, Object> attributeMap;
         private ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum;
-        private Function<BiPredicate<String, String>, BiPredicate<String, String>> skipPredicateWrapper;
+        private UnaryOperator<BiPredicate<String, String>> skipPredicateWrapper;
 
         public InterceptContext(Invocation invocation, InjectConditionSQLInterceptor interceptor,
                                 ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum) {
@@ -341,7 +341,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             return conditionExpression == null ? null : interceptor.skipTablePredicateMap.get(conditionExpression.getSourceSql());
         }
 
-        public void setSkipPredicateWrapper(Function<BiPredicate<String, String>, BiPredicate<String, String>> skipPredicateWrapper) {
+        public void setSkipPredicateWrapper(UnaryOperator<BiPredicate<String, String>> skipPredicateWrapper) {
             this.skipPredicateWrapper = skipPredicateWrapper;
         }
 
@@ -432,12 +432,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             return SQL.compileString(conditionExpression, valueGetter::getValue, true);
         }
 
-        CompileConditionInjectSelector DEFAULT = new CompileConditionInjectSelector() {
-            @Override
-            public List<SQL> select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
-                return conditionExpressionList.isEmpty() ? null : Collections.singletonList(conditionExpressionList.get(0));
-            }
-        };
+        CompileConditionInjectSelector DEFAULT = (conditionExpressionList, valueGetter, interceptContext) -> conditionExpressionList.isEmpty() ? null : Collections.singletonList(conditionExpressionList.get(0));
     }
 
     public static class SkipTablePredicate implements BiPredicate<String, String> {

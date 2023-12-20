@@ -39,6 +39,23 @@ public class MybatisInterceptAutoConfiguration {
                 }
             }
 
+            private List<DataSource> getDataSourceList() {
+                List<DataSource> dataSourceList = new ArrayList<>();
+                Map<String, SelectUniqueKeyDatasourceProvider> datasourceProviderMap = beanFactory.getBeansOfType(SelectUniqueKeyDatasourceProvider.class, true, true);
+                if (datasourceProviderMap.isEmpty()) {
+                    Map<String, DataSource> dataSourceMap = beanFactory.getBeansOfType(DataSource.class, false, true);
+                    dataSourceList.addAll(dataSourceMap.values());
+                } else {
+                    for (SelectUniqueKeyDatasourceProvider provider : datasourceProviderMap.values()) {
+                        DataSource dataSource = provider.getDataSource();
+                        if (dataSource != null) {
+                            dataSourceList.add(dataSource);
+                        }
+                    }
+                }
+                return dataSourceList;
+            }
+
             @Override
             public void run() {
                 InjectConditionSQLInterceptor.CompileConditionInjectSelector injectSelector = getBean(InjectConditionSQLInterceptor.CompileConditionInjectSelector.class);
@@ -46,20 +63,9 @@ public class MybatisInterceptAutoConfiguration {
                     PlatformDependentUtil.onCompileInjectorReady(injectSelector);
                 }
 
-                List<DataSource> dataSourceList = new ArrayList<>();
+                List<DataSource> dataSourceList;
                 try {
-                    Map<String, SelectUniqueKeyDatasourceProvider> datasourceProviderMap = beanFactory.getBeansOfType(SelectUniqueKeyDatasourceProvider.class, true, true);
-                    if (datasourceProviderMap.isEmpty()) {
-                        Map<String, DataSource> dataSourceMap = beanFactory.getBeansOfType(DataSource.class, false, true);
-                        dataSourceList.addAll(dataSourceMap.values());
-                    } else {
-                        for (SelectUniqueKeyDatasourceProvider provider : datasourceProviderMap.values()) {
-                            DataSource dataSource = provider.getDataSource();
-                            if (dataSource != null) {
-                                dataSourceList.add(dataSource);
-                            }
-                        }
-                    }
+                    dataSourceList = getDataSourceList();
                 } catch (Exception e) {
                     if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationThread.class, "getDataSource error = {}", e.toString(), e)) {
                         e.printStackTrace();

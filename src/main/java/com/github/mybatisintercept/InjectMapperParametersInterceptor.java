@@ -69,7 +69,7 @@ public class InjectMapperParametersInterceptor implements Interceptor {
     }
 
     protected Object getMeta(InterceptContext interceptContext) {
-        Map<String, Object> user = new LinkedHashMap<>((int) (attrNames.size() / 2 * 0.75));
+        Map<String, Object> user = new LinkedHashMap<>((int) (attrNames.size() / 2D * 0.75));
         for (String attrName : attrNames) {
             user.put(attrName, valueProvider.invokeWithOnBindContext(attrName, interceptContext));
         }
@@ -109,25 +109,30 @@ public class InjectMapperParametersInterceptor implements Interceptor {
         }
     }
 
+    private Properties getProperties() {
+        Properties result = this.properties;
+        if (result == null || result.isEmpty()) {
+            result = System.getProperties();
+        }
+        if (PlatformDependentUtil.SPRING_ENVIRONMENT_READY) {
+            result = PlatformDependentUtil.resolveSpringPlaceholders(result, "InjectMapperParametersInterceptor.");
+        }
+        return result;
+    }
+
     public void initIfNeed() {
         if (!initFlag.compareAndSet(false, true)) {
             return;
         }
-        Properties properties = this.properties;
-        if (properties == null || properties.isEmpty()) {
-            properties = System.getProperties();
-        }
-        if (PlatformDependentUtil.SPRING_ENVIRONMENT_READY) {
-            properties = PlatformDependentUtil.resolveSpringPlaceholders(properties, "InjectMapperParametersInterceptor.");
-        }
-        String valueProvider = properties.getProperty("InjectMapperParametersInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
-        String metaName = properties.getProperty("InjectMapperParametersInterceptor.metaName", "_meta");
-        String attrNames = properties.getProperty("InjectMapperParametersInterceptor.attrNames", "id,tenantId");
+        Properties properties = getProperties();
+        String valueProviderString = properties.getProperty("InjectMapperParametersInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
+        String metaNameString = properties.getProperty("InjectMapperParametersInterceptor.metaName", "_meta");
+        String attrNamesString = properties.getProperty("InjectMapperParametersInterceptor.attrNames", "id,tenantId");
 
-        this.valueProvider = new StaticMethodAccessor<>(valueProvider);
-        this.metaName = metaName;
-        if (attrNames.trim().length() > 0) {
-            this.attrNames.addAll(Arrays.stream(attrNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
+        this.valueProvider = new StaticMethodAccessor<>(valueProviderString);
+        this.metaName = metaNameString;
+        if (attrNamesString.trim().length() > 0) {
+            this.attrNames.addAll(Arrays.stream(attrNamesString.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
     }
 
