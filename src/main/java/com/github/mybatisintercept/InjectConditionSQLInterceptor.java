@@ -45,6 +45,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
      */
     private final Map<String, List<TableUniqueIndex>> tableUniqueKeyColumnMap = Collections.synchronizedMap(new HashMap<>());
     private final List<SQL> conditionExpressionList = new ArrayList<>();
+    private final List<SQL> unmodifiableConditionExpressionList = Collections.unmodifiableList(conditionExpressionList);
     private final AtomicBoolean initFlag = new AtomicBoolean();
     private String dbType;
     private ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum;
@@ -77,17 +78,20 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             // 2. isSupportIntercept
             InterceptContext interceptContext = new InterceptContext(invocation, this, existInjectConditionStrategyEnum);
             if (isSupportIntercept(interceptContext)) {
-                // 3. compileInject
-                String injectCondition = compileConditionInjectSelector.compileInject(interceptContext);
-                if (injectCondition != null && !injectCondition.isEmpty()) {
-                    // 4. addAndCondition
-                    String rawSql = MybatisUtil.getBoundSqlString(invocation);
-                    String newSql = ASTDruidUtil.addAndCondition(rawSql, injectCondition, interceptContext.getExistInjectConditionStrategyEnum(), dbType, interceptContext.getSkipPredicate(), uniqueKeyPredicate);
-                    if (!Objects.equals(rawSql, newSql)) {
-                        // 5. rewriteSql
-                        MybatisUtil.rewriteSql(invocation, newSql);
+                do {
+                    // 3. compileInject
+                    String injectCondition = compileConditionInjectSelector.compileInject(interceptContext);
+                    if (injectCondition != null && !injectCondition.isEmpty()) {
+                        // 4. addAndCondition
+                        String rawSql = MybatisUtil.getBoundSqlString(invocation);
+                        String newSql = ASTDruidUtil.addAndCondition(rawSql, injectCondition, interceptContext.getExistInjectConditionStrategyEnum(), dbType, interceptContext.getSkipPredicate(), uniqueKeyPredicate);
+                        if (!Objects.equals(rawSql, newSql)) {
+                            // 5. rewriteSql
+                            MybatisUtil.rewriteSql(invocation, newSql);
+                        }
                     }
-                }
+                    interceptContext.endConditionExpression();
+                } while (interceptContext.hasNextConditionExpression());
             }
         }
         return invocation.proceed();
@@ -99,6 +103,10 @@ public class InjectConditionSQLInterceptor implements Interceptor {
 
     public SkipTablePredicate getDefaultSkipTablePredicate() {
         return defaultSkipTablePredicate;
+    }
+
+    public List<SQL> getUnmodifiableConditionExpressionList() {
+        return unmodifiableConditionExpressionList;
     }
 
     public List<SQL> getConditionExpressionList() {
@@ -173,7 +181,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         String dbType = properties.getProperty("InjectConditionSQLInterceptor.dbType", "mysql");
         String existInjectConditionStrategyEnum = properties.getProperty("InjectConditionSQLInterceptor.existInjectConditionStrategyEnum", "RULE_TABLE_MATCH_THEN_SKIP_ITEM");
 
-        String[] conditionExpressions = properties.getProperty("InjectConditionSQLInterceptor.conditionExpression", "tenant_id = ${tenantId}").split(";"); // 字符串请这样写： 字段 = '${属性}'
+        String[] conditionExpressions = filterEmpty(properties.getProperty("InjectConditionSQLInterceptor.conditionExpression", "tenant_id = ${tenantId}").split(";")); // 字符串请这样写： 字段 = '${属性}'
         String interceptPackageNames = properties.getProperty("InjectConditionSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
         String skipTableNames = properties.getProperty("InjectConditionSQLInterceptor.skipTableNames", "");
         boolean enabledUniqueKey = "true".equalsIgnoreCase(properties.getProperty("InjectConditionSQLInterceptor.enabledUniqueKey", "true"));
@@ -246,7 +254,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
         if (skipTableNames.trim().length() > 0) {
-            this.defaultSkipTablePredicate.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
+            this.defaultSkipTablePredicate.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).filter(e -> !e.isEmpty()).collect(Collectors.toList()));
         }
     }
 
@@ -261,7 +269,13 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                 continue;
             }
             String tableName = split[0].trim();
+            if (tableName.isEmpty()) {
+                continue;
+            }
             String cols = split[1].trim();
+            if (cols.isEmpty()) {
+                continue;
+            }
             String[] colsArray = cols.split(",");
             map.put(tableName, new ArrayList<>(Collections.singletonList(new ParseTableUniqueIndex(Arrays.stream(colsArray).map(String::trim).collect(Collectors.toList())))));
         }
@@ -277,7 +291,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
     public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectConditionSQLInterceptor> {
         private final Invocation invocation;
         private final InjectConditionSQLInterceptor interceptor;
-        private SQL conditionExpression;
+        private List<SQL> conditionExpressionList;
+        private int conditionExpressionIndex;
         private Map<String, Object> attributeMap;
         private ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum;
         private Function<BiPredicate<String, String>, BiPredicate<String, String>> skipPredicateWrapper;
@@ -298,14 +313,31 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
 
         public SQL getConditionExpression() {
-            return conditionExpression;
+            return conditionExpressionList == null || conditionExpressionList.isEmpty() || conditionExpressionIndex >= conditionExpressionList.size() ? null : conditionExpressionList.get(conditionExpressionIndex);
         }
 
-        public void setConditionExpression(SQL conditionExpression) {
-            this.conditionExpression = conditionExpression;
+        public List<SQL> getConditionExpressionList() {
+            return conditionExpressionList;
+        }
+
+        public void setConditionExpressionList(List<SQL> conditionExpressionList) {
+            this.conditionExpressionList = conditionExpressionList;
+        }
+
+        public int getConditionExpressionIndex() {
+            return conditionExpressionIndex;
+        }
+
+        boolean hasNextConditionExpression() {
+            return conditionExpressionList != null && conditionExpressionIndex < conditionExpressionList.size();
+        }
+
+        void endConditionExpression() {
+            conditionExpressionIndex++;
         }
 
         public SkipTablePredicate getConditionSkipPredicate() {
+            SQL conditionExpression = getConditionExpression();
             return conditionExpression == null ? null : interceptor.skipTablePredicateMap.get(conditionExpression.getSourceSql());
         }
 
@@ -358,25 +390,31 @@ public class InjectConditionSQLInterceptor implements Interceptor {
         }
 
         default String compileInject(InterceptContext interceptContext) {
+            int conditionExpressionIndex = interceptContext.getConditionExpressionIndex();
             com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter = interceptContext.getValueGetter();
-            SQL conditionExpression = select(interceptContext.getInterceptor().getConditionExpressionList(), valueGetter, interceptContext);
-            if (conditionExpression == null) {
-                return null;
+            List<SQL> selectConditionExpression;
+            if (conditionExpressionIndex == 0) {
+                selectConditionExpression = select(interceptContext.getInterceptor().getUnmodifiableConditionExpressionList(), valueGetter, interceptContext);
+                if (selectConditionExpression == null || selectConditionExpression.isEmpty()) {
+                    return null;
+                } else {
+                    interceptContext.setConditionExpressionList(selectConditionExpression);
+                }
             } else {
-                interceptContext.setConditionExpression(conditionExpression);
-                return compile(conditionExpression.getSourceSql(), valueGetter, interceptContext);
+                selectConditionExpression = interceptContext.getConditionExpressionList();
             }
+            return compile(selectConditionExpression.get(conditionExpressionIndex).getSourceSql(), valueGetter, interceptContext);
         }
 
         /**
-         * 选择一条SQL模板
+         * 筛选出SQL模板
          *
          * @param conditionExpressionList 表达式sql集合
          * @param valueGetter             表达式值
          * @param interceptContext        上下文
-         * @return 选中一条SQL模板
+         * @return 筛选后SQL模板
          */
-        SQL select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext);
+        List<SQL> select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext);
 
         /**
          * 编译
@@ -392,8 +430,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
 
         CompileConditionInjectSelector DEFAULT = new CompileConditionInjectSelector() {
             @Override
-            public SQL select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
-                return conditionExpressionList.isEmpty() ? null : conditionExpressionList.get(0);
+            public List<SQL> select(List<SQL> conditionExpressionList, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
+                return conditionExpressionList.isEmpty() ? null : Collections.singletonList(conditionExpressionList.get(0));
             }
         };
     }
@@ -446,4 +484,16 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             return false;
         }
     }
+
+    private static String[] filterEmpty(String[] strings) {
+        List<String> list = new ArrayList<>();
+        for (String string : strings) {
+            if (string == null || string.trim().isEmpty()) {
+                continue;
+            }
+            list.add(string);
+        }
+        return list.toArray(new String[0]);
+    }
+
 }
