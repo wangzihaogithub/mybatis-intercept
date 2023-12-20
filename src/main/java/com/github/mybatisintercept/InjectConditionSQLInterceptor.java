@@ -90,8 +90,8 @@ public class InjectConditionSQLInterceptor implements Interceptor {
                             MybatisUtil.rewriteSql(invocation, newSql);
                         }
                     }
-                    interceptContext.endConditionExpression();
-                } while (interceptContext.hasNextConditionExpression());
+                    interceptContext.next();
+                } while (interceptContext.hasNext());
             }
         }
         return invocation.proceed();
@@ -328,11 +328,11 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             return conditionExpressionIndex;
         }
 
-        boolean hasNextConditionExpression() {
+        boolean hasNext() {
             return conditionExpressionList != null && conditionExpressionIndex < conditionExpressionList.size();
         }
 
-        void endConditionExpression() {
+        void next() {
             conditionExpressionIndex++;
         }
 
@@ -403,7 +403,11 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             } else {
                 selectConditionExpression = interceptContext.getConditionExpressionList();
             }
-            return compile(selectConditionExpression.get(conditionExpressionIndex).getSourceSql(), valueGetter, interceptContext);
+            SQL sql = selectConditionExpression.get(conditionExpressionIndex);
+            if (sql == null) {
+                return null;
+            }
+            return compile(sql.getSourceSql(), valueGetter, interceptContext);
         }
 
         /**

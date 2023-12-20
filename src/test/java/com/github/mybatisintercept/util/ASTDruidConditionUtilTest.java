@@ -63,6 +63,27 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+        String injectConditionNfq2 = ASTDruidTestUtil.addAndCondition("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ?",
+                "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ");
+        Assert.assertEquals("SELECT *\n" +
+                "FROM p_user pu\n" +
+                "\tLEFT JOIN p_dept pd\n" +
+                "\tON pu.dept_id = pd.id\n" +
+                "\t\tAND (pd.tenant_id = 1\n" +
+                "\t\t\tOR pd.tenant_id IN (\n" +
+                "\t\t\t\tSELECT tenant_id\n" +
+                "\t\t\t\tFROM tenant_scope\n" +
+                "\t\t\t\tWHERE type = 1\n" +
+                "\t\t\t\t\tAND xx = ${x}\n" +
+                "\t\t\t))\n" +
+                "WHERE pu.id = ?\n" +
+                "\tAND (pu.tenant_id = 1\n" +
+                "\t\tOR pu.tenant_id IN (\n" +
+                "\t\t\tSELECT tenant_id\n" +
+                "\t\t\tFROM tenant_scope\n" +
+                "\t\t\tWHERE type = 1\n" +
+                "\t\t\t\tAND xx = ${x}\n" +
+                "\t\t))", injectConditionNfq2);
 
         String injectConditionNq = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
                 "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ");
@@ -71,7 +92,7 @@ public class ASTDruidConditionUtilTest {
                 "\tLEFT JOIN dept t2\n" +
                 "\tON t1.dept_id = t2.id\n" +
                 "\t\tAND (t2.tenant_id = 1\n" +
-                "\t\t\tOR tenant_id IN (\n" +
+                "\t\t\tOR t2.tenant_id IN (\n" +
                 "\t\t\t\tSELECT tenant_id\n" +
                 "\t\t\t\tFROM tenant_scope\n" +
                 "\t\t\t\tWHERE type = 1\n" +
@@ -79,7 +100,7 @@ public class ASTDruidConditionUtilTest {
                 "\t\t\t))\n" +
                 "WHERE t1.id = ?\n" +
                 "\tAND (t1.tenant_id = 1\n" +
-                "\t\tOR tenant_id IN (\n" +
+                "\t\tOR t1.tenant_id IN (\n" +
                 "\t\t\tSELECT tenant_id\n" +
                 "\t\t\tFROM tenant_scope\n" +
                 "\t\t\tWHERE type = 1\n" +
@@ -114,14 +135,14 @@ public class ASTDruidConditionUtilTest {
                 "FROM user t1\n" +
                 "\tLEFT JOIN dept t2\n" +
                 "\tON t2.dept_id = t2.id\n" +
-                "\t\tAND tenant_id IN (\n" +
+                "\t\tAND t2.tenant_id IN (\n" +
                 "\t\t\tSELECT tenant_id\n" +
                 "\t\t\tFROM tenant_scope\n" +
                 "\t\t\tWHERE type = 1\n" +
                 "\t\t\t\tAND xx = ${x}\n" +
                 "\t\t)\n" +
                 "WHERE t1.id = ?\n" +
-                "\tAND tenant_id IN (\n" +
+                "\tAND t1.tenant_id IN (\n" +
                 "\t\tSELECT tenant_id\n" +
                 "\t\tFROM tenant_scope\n" +
                 "\t\tWHERE type = 1\n" +

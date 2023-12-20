@@ -48,6 +48,10 @@ public class SQL {
         return exprSql;
     }
 
+    public static SQL compile(String expressionsSql) {
+        return compile(expressionsSql, e -> null, false);
+    }
+
     public static SQL compile(String expressionsSql, Map<String, Object> getter) {
         return compile(expressionsSql, getter::get);
     }

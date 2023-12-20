@@ -245,14 +245,23 @@ public class ASTDruidConditionUtil {
         return false;
     }
 
-    private static boolean existInjectCondition(SQLStatement readonlyAst,
-                                                List<SQLName> injectConditionColumnList,
-                                                BiPredicate<String, String> skip) {
+    private static boolean existInjectConditionAndPreparedTableAliasMap(SQLStatement readonlyAst,
+                                                                        List<SQLName> injectConditionColumnList,
+                                                                        BiPredicate<String, String> skip,
+                                                                        Map<String, SQLExprTableSource> tableAliasMap) {
         boolean[] exist = new boolean[1];
         readonlyAst.accept(new SQLASTVisitorAdapter() {
             private boolean select;
             private boolean update;
             private boolean delete;
+
+            @Override
+            public void endVisit(SQLExprTableSource tableSource) {
+                String alias = getAlias(tableSource);
+                if (alias != null) {
+                    tableAliasMap.put(alias, tableSource);
+                }
+            }
 
             @Override
             public boolean visit(SQLSelectQueryBlock statement) {
@@ -392,18 +401,20 @@ public class ASTDruidConditionUtil {
         if (ast instanceof MySqlShowStatement || ast instanceof SQLSetStatement) {
             return false;
         }
+
+        Map<String, SQLExprTableSource> tableAliasMap = new HashMap<>(3);
         List<SQLName> injectConditionColumnList;
         switch (existInjectConditionStrategyEnum) {
             case ANY_TABLE_MATCH_THEN_SKIP_SQL: {
                 injectConditionColumnList = flatColumnList(injectCondition);
-                if (existInjectCondition(ast, injectConditionColumnList, (schema, tableName) -> false)) {
+                if (existInjectConditionAndPreparedTableAliasMap(ast, injectConditionColumnList, (schema, tableName) -> false, tableAliasMap)) {
                     return false;
                 }
                 break;
             }
             case RULE_TABLE_MATCH_THEN_SKIP_SQL: {
                 injectConditionColumnList = flatColumnList(injectCondition);
-                if (existInjectCondition(ast, injectConditionColumnList, skip)) {
+                if (existInjectConditionAndPreparedTableAliasMap(ast, injectConditionColumnList, skip, tableAliasMap)) {
                     return false;
                 }
                 break;
@@ -418,8 +429,11 @@ public class ASTDruidConditionUtil {
                 break;
             }
         }
-        Map<String, SQLExprTableSource> tableAliasMap = new HashMap<>(3);
-        preparedTableAliasMap(ast, tableAliasMap);
+
+        // 减少1次遍历
+        if (tableAliasMap.isEmpty()) {
+            preparedTableAliasMap(ast, tableAliasMap);
+        }
 
         injectCondition.accept(InjectMarkSQLASTVisitor.INSTANCE);
 
@@ -896,15 +910,22 @@ public class ASTDruidConditionUtil {
         } else if (left instanceof SQLName) {
             String simpleName = ((SQLName) left).getSimpleName();
             newLeft = new SQLPropertyExpr(conditionAlias, simpleName);
+        } else if (left instanceof SQLInSubQueryExpr) {
+            newLeft = left.clone();
+            ((SQLInSubQueryExpr) newLeft).setExpr(mergeConditionIfExistAlias(((SQLInSubQueryExpr) left).getExpr(), null, operator, conditionAlias));
         } else {
             newLeft = left == null ? null : left.clone();
         }
+
         if (right instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr expr = (SQLBinaryOpExpr) right;
             newRight = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias);
         } else if (right instanceof SQLIdentifierExpr) {
             String simpleName = ((SQLName) right).getSimpleName();
             newRight = new SQLPropertyExpr(conditionAlias, simpleName);
+        } else if (right instanceof SQLInSubQueryExpr) {
+            newRight = right.clone();
+            ((SQLInSubQueryExpr) newRight).setExpr(mergeConditionIfExistAlias(((SQLInSubQueryExpr) right).getExpr(), null, operator, conditionAlias));
         } else {
             newRight = right == null ? null : right.clone();
         }

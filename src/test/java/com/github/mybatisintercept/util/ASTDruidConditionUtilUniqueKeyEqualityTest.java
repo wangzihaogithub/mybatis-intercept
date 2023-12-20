@@ -79,6 +79,22 @@ public class ASTDruidConditionUtilUniqueKeyEqualityTest {
         table2.put("p_user", Arrays.asList("id"));
         table2.put("pipeline", Arrays.asList("id"));
 
+        Map<String, List<String>> table3 = new HashMap<>();
+        table3.put("p_dept", Arrays.asList("id"));
+        String injectConditionNfq2 = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ?",
+                "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ", table3);
+        Assert.assertEquals("SELECT *\n" +
+                "FROM p_user pu\n" +
+                "\tLEFT JOIN p_dept pd ON pu.dept_id = pd.id\n" +
+                "WHERE pu.id = ?\n" +
+                "\tAND (pu.tenant_id = 1\n" +
+                "\t\tOR pu.tenant_id IN (\n" +
+                "\t\t\tSELECT tenant_id\n" +
+                "\t\t\tFROM tenant_scope\n" +
+                "\t\t\tWHERE type = 1\n" +
+                "\t\t\t\tAND xx = ${x}\n" +
+                "\t\t))", injectConditionNfq2);
+
         String wherePart = ASTDruidTestUtil.addAndConditionIgnoreUniqueKey("SELECT t1.a, t2.b\n" +
                 "FROM user t1\n" +
                 "\t, dept t2 \n" +
