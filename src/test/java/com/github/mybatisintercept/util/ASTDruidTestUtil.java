@@ -2,10 +2,7 @@ package com.github.mybatisintercept.util;
 
 import com.alibaba.druid.sql.ast.expr.SQLBinaryOperator;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.BiPredicate;
 
 public class ASTDruidTestUtil {
@@ -39,6 +36,16 @@ public class ASTDruidTestUtil {
     static String addAndCondition(String sql, String injectCondition) {
         return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
                 ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_SQL, "mysql", null, null);
+    }
+
+    static String addAndCondition(String sql, String injectCondition, String... exclude) {
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
+                ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM, "mysql", null, null, exclude == null ? null : Arrays.asList(exclude));
+    }
+
+    static String addAndConditionAlwaysAppend(String sql, String injectCondition, String... exclude) {
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false,
+                ExistInjectConditionStrategyEnum.ALWAYS_APPEND, "mysql", null, null, exclude == null ? null : Arrays.asList(exclude));
     }
 
     static String addAndConditionIgnoreUniqueKey(String sql, String injectCondition, ExistInjectConditionStrategyEnum strategyEnum, Map<String, List<String>> table) {

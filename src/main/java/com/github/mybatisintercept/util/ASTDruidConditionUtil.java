@@ -72,6 +72,12 @@ public class ASTDruidConditionUtil {
     public static String addCondition(String sql, String injectCondition, SQLBinaryOperator op,
                                       boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
                                       String dbType, BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {
+        return addCondition(sql, injectCondition, op, appendConditionToLeft, existInjectConditionStrategyEnum, dbType, skip, isJoinUniqueKey, null);
+    }
+
+    public static String addCondition(String sql, String injectCondition, SQLBinaryOperator op,
+                                      boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
+                                      String dbType, BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey, List<String> excludeInjectCondition) {
         if (injectCondition == null || injectCondition.isEmpty()) {
             return sql;
         }
@@ -82,12 +88,24 @@ public class ASTDruidConditionUtil {
         SQLStatement ast = stmtList.get(0);
 
         SQLExpr injectConditionExpr = SQLUtils.toSQLExpr(injectCondition, getDbType(dbType));
-        boolean change = addCondition(sql, ast, op, injectConditionExpr, appendConditionToLeft, existInjectConditionStrategyEnum, wrapDialectSkip(dbType, skip), isJoinUniqueKey);
+        List<SQLExpr> excludeInjectConditionExprList = getExcludeInjectConditionExprList(excludeInjectCondition, dbType);
+        boolean change = addCondition(sql, ast, op, injectConditionExpr, appendConditionToLeft, existInjectConditionStrategyEnum, wrapDialectSkip(dbType, skip), isJoinUniqueKey, excludeInjectConditionExprList);
         if (change) {
             return SQLUtils.toSQLString(ast, dbType);
         } else {
             return sql;
         }
+    }
+
+    private static List<SQLExpr> getExcludeInjectConditionExprList(List<String> excludeInjectCondition, String dbType) {
+        if (excludeInjectCondition == null) {
+            return null;
+        }
+        List<SQLExpr> list = new ArrayList<>(excludeInjectCondition.size());
+        for (String s : excludeInjectCondition) {
+            list.add(SQLUtils.toSQLExpr(s, getDbType(dbType)));
+        }
+        return list;
     }
 
     private static BiPredicate<String, String> wrapDialectSkip(String dbType, BiPredicate<String, String> skip) {
@@ -397,7 +415,7 @@ public class ASTDruidConditionUtil {
 
     private static boolean addCondition(String sql, SQLStatement ast, SQLBinaryOperator op, SQLExpr injectCondition,
                                         boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
-                                        BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {
+                                        BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey, Collection<SQLExpr> excludeInjectCondition) {
         if (ast instanceof MySqlShowStatement || ast instanceof SQLSetStatement) {
             return false;
         }
@@ -450,6 +468,12 @@ public class ASTDruidConditionUtil {
                     return true;
                 }
                 return !update && !delete;
+            }
+
+            @Override
+            public boolean visit(SQLBinaryOpExpr expr) {
+                // 1.排除的条件
+                return !existExcludeInjectConditionList(excludeInjectCondition, expr);
             }
 
             @Override
@@ -825,6 +849,89 @@ public class ASTDruidConditionUtil {
             }
         }
         return list;
+    }
+
+    private static boolean existExcludeInjectConditionList(Collection<SQLExpr> excludeInjectList, SQLExpr where) {
+        if (excludeInjectList != null) {
+            for (SQLExpr exclude : excludeInjectList) {
+                if (existExcludeInjectCondition(exclude, where)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isEquals(SQLObject exclude, SQLObject where) {
+        if (exclude == null && where == null) {
+            return true;
+        }
+        if (exclude == null || where == null) {
+            return false;
+        }
+        if (exclude.getClass() != where.getClass()) {
+            return false;
+        }
+        if (exclude instanceof SQLPropertyExpr && where instanceof SQLPropertyExpr) {
+            SQLPropertyExpr excludeExpr = (SQLPropertyExpr) exclude;
+            SQLPropertyExpr whereExpr = (SQLPropertyExpr) where;
+            return equalsIgnoreCase(normalize(excludeExpr.getName()), normalize(whereExpr.getName()));
+        } else if (exclude instanceof SQLIdentifierExpr && where instanceof SQLIdentifierExpr) {
+            SQLIdentifierExpr excludeExpr = (SQLIdentifierExpr) exclude;
+            SQLIdentifierExpr whereExpr = (SQLIdentifierExpr) where;
+            return equalsIgnoreCase(normalize(excludeExpr.getName()), normalize(whereExpr.getName()));
+        } else if (exclude instanceof SQLBinaryOpExpr && where instanceof SQLBinaryOpExpr) {
+            SQLBinaryOpExpr excludeExpr = (SQLBinaryOpExpr) exclude;
+            SQLBinaryOpExpr whereExpr = (SQLBinaryOpExpr) where;
+            return excludeExpr.getOperator() == whereExpr.getOperator();
+        } else {
+            return true;
+        }
+    }
+
+    public static boolean equalsIgnoreCase(String a, String b) {
+        return (a == b) || (a != null && a.equalsIgnoreCase(b));
+    }
+
+    private static boolean existExcludeInjectCondition(SQLExpr exclude, SQLExpr where) {
+        if (where == null) {
+            return false;
+        }
+        if (!isEquals(exclude, where)) {
+            return false;
+        }
+
+        LinkedList<SQLObject> tempexclude = new LinkedList<>();
+        LinkedList<SQLObject> tempwhere = new LinkedList<>();
+        tempexclude.add(exclude);
+        tempwhere.add(where);
+        while (true) {
+            if (tempexclude.size() != tempwhere.size()) {
+                return false;
+            }
+            if (tempexclude.isEmpty()) {
+                return true;
+            }
+            SQLObject excludeExpr = tempexclude.removeFirst();
+            SQLObject whereExpr = tempwhere.removeFirst();
+            if (!isEquals(excludeExpr, whereExpr)) {
+                return false;
+            }
+            if (excludeExpr instanceof SQLExpr) {
+                SQLExpr itemExpr = (SQLExpr) excludeExpr;
+                List<SQLObject> next = itemExpr.getChildren();
+                if (next != null && !next.isEmpty()) {
+                    tempexclude.addAll(next);
+                }
+            }
+            if (whereExpr instanceof SQLExpr) {
+                SQLExpr itemExpr = (SQLExpr) whereExpr;
+                List<SQLObject> next = itemExpr.getChildren();
+                if (next != null && !next.isEmpty()) {
+                    tempwhere.addAll(next);
+                }
+            }
+        }
     }
 
     private static boolean existInjectCondition(List<SQLName> injectConditionColumnList, String aliasOrTableName, SQLExpr where) {

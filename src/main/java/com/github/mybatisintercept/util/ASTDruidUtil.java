@@ -14,8 +14,8 @@ import java.util.function.Predicate;
 
 public class ASTDruidUtil {
 
-    public static String addAndCondition(String sql, String injectCondition, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum, String dbType, BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey) {
-        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, existInjectConditionStrategyEnum, dbType, skip, isJoinUniqueKey);
+    public static String addAndCondition(String sql, String injectCondition, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum, String dbType, BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey, List<String> excludeInjectCondition) {
+        return ASTDruidConditionUtil.addCondition(sql, injectCondition, SQLBinaryOperator.BooleanAnd, false, existInjectConditionStrategyEnum, dbType, skip, isJoinUniqueKey, excludeInjectCondition);
     }
 
     static SQLExpr toValueExpr(Object value) {

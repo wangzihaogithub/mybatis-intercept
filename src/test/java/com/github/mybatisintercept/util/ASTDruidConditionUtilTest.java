@@ -63,6 +63,46 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+
+        String injectConditdionNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ? and (tenant_id =1 or tenant_id in (select tenant_id from tenant_scope ))",
+                "id in (1,2)",
+                "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope )");
+        Assert.assertEquals("SELECT *\n" +
+                "FROM p_user pu\n" +
+                "\tLEFT JOIN p_dept pd\n" +
+                "\tON pd.dept_id = pd.id\n" +
+                "\t\tAND id IN (1, 2)\n" +
+                "WHERE pu.id = ?\n" +
+                "\tAND (pu.tenant_id = 1\n" +
+                "\t\tOR pu.tenant_id IN (\n" +
+                "\t\t\tSELECT tenant_id\n" +
+                "\t\t\tFROM tenant_scope\n" +
+                "\t\t))\n" +
+                "\tAND id IN (1, 2)", injectConditdionNdfq2);
+
+        String injectConditdionNfq2 = ASTDruidTestUtil.addAndCondition("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ? and (tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ))",
+                "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ",
+                "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ");
+        Assert.assertEquals("SELECT *\n" +
+                "FROM p_user pu\n" +
+                "\tLEFT JOIN p_dept pd\n" +
+                "\tON pu.dept_id = pd.id\n" +
+                "\t\tAND (pd.tenant_id = 1\n" +
+                "\t\t\tOR pd.tenant_id IN (\n" +
+                "\t\t\t\tSELECT tenant_id\n" +
+                "\t\t\t\tFROM tenant_scope\n" +
+                "\t\t\t\tWHERE type = 1\n" +
+                "\t\t\t\t\tAND xx = ${x}\n" +
+                "\t\t\t))\n" +
+                "WHERE pu.id = ?\n" +
+                "\tAND (tenant_id = 1\n" +
+                "\t\tOR tenant_id IN (\n" +
+                "\t\t\tSELECT tenant_id\n" +
+                "\t\t\tFROM tenant_scope\n" +
+                "\t\t\tWHERE type = 1\n" +
+                "\t\t\t\tAND xx = ${x}\n" +
+                "\t\t))", injectConditdionNfq2);
+
         String injectConditionNfq2 = ASTDruidTestUtil.addAndCondition("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ?",
                 "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ");
         Assert.assertEquals("SELECT *\n" +
@@ -84,6 +124,11 @@ public class ASTDruidConditionUtilTest {
                 "\t\t\tWHERE type = 1\n" +
                 "\t\t\t\tAND xx = ${x}\n" +
                 "\t\t))", injectConditionNfq2);
+
+        String injectConditionNfqff2 = ASTDruidTestUtil.addAndCondition("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ? and (pu.tenant_id =1 or pu.tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ))",
+                " tenant_id =1 ");
+        Assert.assertEquals("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ? and (pu.tenant_id =1 or pu.tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ))", injectConditionNfqff2);
+
 
         String injectConditionNq = ASTDruidTestUtil.addAndCondition("select t1.a, t2.b from user t1 left join dept t2 on t1.dept_id = t2.id where t1.id = ?",
                 "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope where type = 1 and xx=${x} ) ");

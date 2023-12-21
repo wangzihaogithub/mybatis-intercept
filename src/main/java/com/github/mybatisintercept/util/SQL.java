@@ -24,6 +24,21 @@ public class SQL {
         }
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SQL sql = (SQL) o;
+        return Objects.equals(sourceSql, sql.sourceSql) && Objects.equals(exprSql, sql.exprSql) && Arrays.equals(args, sql.args) && Objects.equals(argNameAndDefaultValues, sql.argNameAndDefaultValues) && Objects.equals(placeholders, sql.placeholders) && Objects.equals(argsMap, sql.argsMap);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(sourceSql, exprSql, argNameAndDefaultValues, placeholders, argsMap);
+        result = 31 * result + Arrays.hashCode(args);
+        return result;
+    }
+
     public String getSourceSql() {
         return sourceSql;
     }
