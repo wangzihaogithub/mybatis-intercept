@@ -16,12 +16,16 @@ public class MysqlMissColumnDataSourceConsumer implements Consumer<Collection<Da
     private static final Map<String, Set<String>> SKIP_TABLE_NAMES_CACHE = new ConcurrentHashMap<>(2);
     private static final Map<Integer, String> CATALOG_CACHE = new ConcurrentHashMap<>(2);
 
-    private final TreeSet<TreeSet<String>> columnList = new TreeSet<>(Comparator.comparing(Objects::hashCode));
+    private final Collection<TreeSet<String>> columnList = new LinkedHashSet<>();
 
     public MysqlMissColumnDataSourceConsumer(Collection<? extends Collection<String>> groupColumnList) {
         for (Collection<String> columnList : groupColumnList) {
             this.columnList.add(new TreeSet<>(columnList));
         }
+    }
+
+    public Collection<TreeSet<String>> getColumnList() {
+        return columnList;
     }
 
     @Override

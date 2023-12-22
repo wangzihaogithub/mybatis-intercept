@@ -9,18 +9,12 @@ import org.apache.ibatis.plugin.Interceptor;
 import java.util.Map;
 
 public class ValueGetterImpl implements InterceptContext.ValueGetter {
-    private final Object mybatisParameter;
-    private final Map<String, Object> mybatisParameterGetter;
     private final InterceptContext<Interceptor> interceptContext;
+    private boolean initMybatisParameter;
+    private Map<String, Object> mybatisParameterGetter;
 
     public ValueGetterImpl(InterceptContext interceptContext) {
         this.interceptContext = interceptContext;
-        this.mybatisParameter = interceptContext.getParameter();
-        this.mybatisParameterGetter = MybatisUtil.isInstanceofKeyValue(mybatisParameter) ? BeanMap.toMap(mybatisParameter) : null;
-    }
-
-    protected <T> T cast(Object value, Class<T> type) {
-        return type == null || type == Object.class ? (T) value : TypeUtil.cast(value, type);
     }
 
     @Override
@@ -31,6 +25,10 @@ public class ValueGetterImpl implements InterceptContext.ValueGetter {
 
     @Override
     public <T> T getMybatisParameterValue(String name, Class<T> type) {
+        if (!initMybatisParameter) {
+            this.mybatisParameterGetter = createMybatisParameterGetter(interceptContext.getParameter());
+            this.initMybatisParameter = true;
+        }
         Object value = mybatisParameterGetter != null && mybatisParameterGetter.containsKey(name) ? mybatisParameterGetter.get(name) : null;
         return cast(value, type);
     }
@@ -50,30 +48,24 @@ public class ValueGetterImpl implements InterceptContext.ValueGetter {
 
     @Override
     public Object getCompileValue(String name) {
-        Object value = getProviderValue(name, null);
+        return getCompileValue(name, null);
+    }
+
+    @Override
+    public <T> T getCompileValue(String name, Class<T> type) {
+        T value = getProviderValue(name, type);
         if (value == null) {
-            value = getInterceptAttributeValue(name, null);
+            value = getInterceptAttributeValue(name, type);
         }
         return value;
     }
 
-    @Override
-    public Object getValue(String name) {
-        return getValue(name, null);
+    protected Map<String, Object> createMybatisParameterGetter(Object mybatisParameter) {
+        return MybatisUtil.isInstanceofKeyValue(mybatisParameter) ? BeanMap.toMap(mybatisParameter) : null;
     }
 
-    @Override
-    public <T> T getValue(String name, Class<T> type) {
-        Object value = getProviderValue(name, type);
-        if (value == null) {
-            value = getMybatisParameterValue(name, type);
-        }
-        if (value == null) {
-            value = getMybatisBoundSqlValue(name, type);
-        }
-        if (value == null) {
-            value = getInterceptAttributeValue(name, type);
-        }
-        return cast(value, type);
+    protected <T> T cast(Object value, Class<T> type) {
+        return type == null || type == Object.class ? (T) value : TypeUtil.cast(value, type);
     }
+
 }

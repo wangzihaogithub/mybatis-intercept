@@ -55,9 +55,7 @@ public interface InterceptContext<INTERCEPTOR extends Interceptor> {
     interface ValueGetter {
         Object getCompileValue(String name);
 
-        Object getValue(String name);
-
-        <T> T getValue(String name, Class<T> type);
+        <T> T getCompileValue(String name, Class<T> type);
 
         <T> T getProviderValue(String name, Class<T> type);
 
