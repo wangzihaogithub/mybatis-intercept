@@ -1,10 +1,7 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.util.BeanMap;
 import com.github.mybatisintercept.util.MybatisUtil;
 import com.github.mybatisintercept.util.StaticMethodAccessor;
-import com.github.mybatisintercept.util.TypeUtil;
-import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.plugin.Interceptor;
 import org.apache.ibatis.plugin.Invocation;
 
@@ -51,7 +48,13 @@ public interface InterceptContext<INTERCEPTOR extends Interceptor> {
 
     StaticMethodAccessor<InterceptContext<INTERCEPTOR>> getValueProvider();
 
+    default ValueGetter getValueGetter() {
+        return new ValueGetterImpl(this);
+    }
+
     interface ValueGetter {
+        Object getCompileValue(String name);
+
         Object getValue(String name);
 
         <T> T getValue(String name, Class<T> type);
@@ -65,59 +68,4 @@ public interface InterceptContext<INTERCEPTOR extends Interceptor> {
         <T> T getInterceptAttributeValue(String name, Class<T> type);
     }
 
-    default ValueGetter getValueGetter() {
-        return new ValueGetter() {
-            private final Object mybatisParameter = getParameter();
-            private final Map<String, Object> mybatisParameterGetter = MybatisUtil.isInstanceofKeyValue(mybatisParameter) ? BeanMap.toMap(mybatisParameter) : null;
-
-            private <T> T cast(Object value, Class<T> type) {
-                return type == null || type == Object.class ? (T) value : TypeUtil.cast(value, type);
-            }
-
-            @Override
-            public <T> T getProviderValue(String name, Class<T> type) {
-                Object value = getValueProvider().invokeWithOnBindContext(name, InterceptContext.this);
-                return cast(value, type);
-            }
-
-            @Override
-            public <T> T getMybatisParameterValue(String name, Class<T> type) {
-                Object value = mybatisParameterGetter != null && mybatisParameterGetter.containsKey(name) ? mybatisParameterGetter.get(name) : null;
-                return cast(value, type);
-            }
-
-            @Override
-            public <T> T getMybatisBoundSqlValue(String name, Class<T> type) {
-                BoundSql boundSql = MybatisUtil.getBoundSql(getInvocation());
-                Object value = boundSql.hasAdditionalParameter(name) ? boundSql.getAdditionalParameter(name) : null;
-                return cast(value, type);
-            }
-
-            @Override
-            public <T> T getInterceptAttributeValue(String name, Class<T> type) {
-                Object value = getAttributeValue(name);
-                return cast(value, type);
-            }
-
-            @Override
-            public Object getValue(String name) {
-                return getValue(name, null);
-            }
-
-            @Override
-            public <T> T getValue(String name, Class<T> type) {
-                Object value = getProviderValue(name, type);
-                if (value == null) {
-                    value = getMybatisParameterValue(name, type);
-                }
-                if (value == null) {
-                    value = getMybatisBoundSqlValue(name, type);
-                }
-                if (value == null) {
-                    value = getInterceptAttributeValue(name, type);
-                }
-                return cast(value, type);
-            }
-        };
-    }
 }

@@ -1073,45 +1073,59 @@ public class ASTDruidConditionUtil {
     }
 
     private static SQLExpr mergeCondition(SQLBinaryOperator op, SQLExpr injectCondition, String alias, boolean left, SQLExpr where) {
+        SQLExpr result;
         if (injectCondition instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr binaryOpExpr = ((SQLBinaryOpExpr) injectCondition);
             SQLExpr injectConditionAlias = alias == null ?
-                    injectCondition : mergeConditionIfExistAlias(binaryOpExpr.getLeft(), binaryOpExpr.getRight(), binaryOpExpr.getOperator(), alias);
+                    injectCondition : mergeConditionIfExistAlias(binaryOpExpr.getLeft(), binaryOpExpr.getRight(), binaryOpExpr.getOperator(), alias, null);
+            injectConditionAlias.accept(InjectMarkSQLASTVisitor.INSTANCE);
             if (where == null) {
-                return injectConditionAlias;
+                result = injectConditionAlias;
+            } else {
+                result = left ? new SQLBinaryOpExpr(injectConditionAlias, op, where) : new SQLBinaryOpExpr(where, op, injectConditionAlias);
             }
-            return left ? new SQLBinaryOpExpr(injectConditionAlias, op, where) : new SQLBinaryOpExpr(where, op, injectConditionAlias);
         } else {
-            return alias == null ?
-                    injectCondition : left ? mergeConditionIfExistAlias(injectCondition, where, op, alias) : mergeConditionIfExistAlias(where, injectCondition, op, alias);
+            injectCondition.accept(InjectMarkSQLASTVisitor.INSTANCE);
+            result = alias == null ?
+                    injectCondition : left ? mergeConditionIfExistAlias(injectCondition, where, op, alias, true) : mergeConditionIfExistAlias(where, injectCondition, op, alias, false);
         }
+        return result;
     }
 
-    private static SQLExpr mergeConditionIfExistAlias(SQLExpr left, SQLExpr right, SQLBinaryOperator operator, String conditionAlias) {
+    private static SQLExpr mergeConditionIfExistAlias(SQLExpr left, SQLExpr right, SQLBinaryOperator operator, String conditionAlias, Boolean aliasLeft) {
         SQLExpr newLeft;
         SQLExpr newRight;
+        boolean leftAppend = aliasLeft == null || aliasLeft;
+        boolean rightAppend = aliasLeft == null || !aliasLeft;
+
         if (left instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr expr = (SQLBinaryOpExpr) left;
-            newLeft = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias);
+            newLeft = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias, leftAppend ? null : false);
         } else if (left instanceof SQLName) {
-            String simpleName = ((SQLName) left).getSimpleName();
-            newLeft = new SQLPropertyExpr(conditionAlias, simpleName);
+            if (leftAppend) {
+                newLeft = new SQLPropertyExpr(conditionAlias, ((SQLName) left).getSimpleName());
+            } else {
+                newLeft = left.clone();
+            }
         } else if (left instanceof SQLInSubQueryExpr) {
             newLeft = left.clone();
-            ((SQLInSubQueryExpr) newLeft).setExpr(mergeConditionIfExistAlias(((SQLInSubQueryExpr) left).getExpr(), null, operator, conditionAlias));
+            ((SQLInSubQueryExpr) newLeft).setExpr(mergeConditionIfExistAlias(((SQLInSubQueryExpr) left).getExpr(), null, operator, conditionAlias, leftAppend ? null : false));
         } else {
             newLeft = left == null ? null : left.clone();
         }
 
         if (right instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr expr = (SQLBinaryOpExpr) right;
-            newRight = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias);
+            newRight = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias, rightAppend ? null : false);
         } else if (right instanceof SQLIdentifierExpr) {
-            String simpleName = ((SQLName) right).getSimpleName();
-            newRight = new SQLPropertyExpr(conditionAlias, simpleName);
+            if (rightAppend) {
+                newRight = new SQLPropertyExpr(conditionAlias, ((SQLName) right).getSimpleName());
+            } else {
+                newRight = right.clone();
+            }
         } else if (right instanceof SQLInSubQueryExpr) {
             newRight = right.clone();
-            ((SQLInSubQueryExpr) newRight).setExpr(mergeConditionIfExistAlias(((SQLInSubQueryExpr) right).getExpr(), null, operator, conditionAlias));
+            ((SQLInSubQueryExpr) newRight).setExpr(mergeConditionIfExistAlias(((SQLInSubQueryExpr) right).getExpr(), null, operator, conditionAlias, rightAppend ? null : false));
         } else {
             newRight = right == null ? null : right.clone();
         }
@@ -1122,9 +1136,6 @@ public class ASTDruidConditionUtil {
             binaryOpExpr = newLeft;
         } else {
             binaryOpExpr = new SQLBinaryOpExpr(newLeft, operator, newRight);
-        }
-        if (binaryOpExpr != null) {
-            binaryOpExpr.accept(InjectMarkSQLASTVisitor.INSTANCE);
         }
         return binaryOpExpr;
     }

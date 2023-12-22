@@ -540,7 +540,7 @@ public class InjectConditionSQLInterceptor implements Interceptor {
          * @return 编译后的SQL
          */
         default String compile(String conditionExpression, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
-            return SQL.compileString(conditionExpression, valueGetter::getValue, true);
+            return SQL.compileString(conditionExpression, valueGetter::getCompileValue, true);
         }
 
         default String compile(int index, int sqlIndex, SQL sql, com.github.mybatisintercept.InterceptContext.ValueGetter valueGetter, InterceptContext interceptContext) {
