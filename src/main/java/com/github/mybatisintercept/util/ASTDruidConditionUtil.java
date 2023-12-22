@@ -263,10 +263,10 @@ public class ASTDruidConditionUtil {
         return false;
     }
 
-    private static boolean existInjectConditionAndPreparedTableAliasMap(SQLStatement readonlyAst,
-                                                                        List<SQLName> injectConditionColumnList,
-                                                                        BiPredicate<String, String> skip,
-                                                                        Map<String, SQLExprTableSource> tableAliasMap) {
+    private static boolean existInjectConditionAndPreparedCollect(SQLStatement readonlyAst,
+                                                                  List<SQLName> injectConditionColumnList,
+                                                                  BiPredicate<String, String> skip,
+                                                                  Map<String, SQLExprTableSource> tableAliasMap) {
         boolean[] exist = new boolean[1];
         readonlyAst.accept(new SQLASTVisitorAdapter() {
             private boolean select;
@@ -401,7 +401,7 @@ public class ASTDruidConditionUtil {
         return exist[0];
     }
 
-    private static void preparedTableAliasMap(SQLStatement ast, Map<String, SQLExprTableSource> tableAliasMap) {
+    private static void preparedCollect(SQLStatement ast, Map<String, SQLExprTableSource> tableAliasMap) {
         ast.accept(new SQLASTVisitorAdapter() {
             @Override
             public void endVisit(SQLExprTableSource tableSource) {
@@ -413,6 +413,31 @@ public class ASTDruidConditionUtil {
         });
     }
 
+    private static void preparedCollectInject(SQLExpr injectCondition, Set<String> cantSpecifyTargetTableNameSet) {
+        injectCondition.accept(new InjectMarkSQLASTVisitor() {
+            private boolean sqlInSubQuery;
+
+            @Override
+            public boolean visit(SQLInSubQueryExpr expr) {
+                this.sqlInSubQuery = true;
+                return true;
+            }
+
+            @Override
+            public void endVisit(SQLInSubQueryExpr expr) {
+                this.sqlInSubQuery = false;
+            }
+
+            @Override
+            public boolean visit(SQLExprTableSource tableSource) {
+                if (sqlInSubQuery) {
+                    cantSpecifyTargetTableNameSet.add(getTableName(tableSource));
+                }
+                return true;
+            }
+        });
+    }
+
     private static boolean addCondition(String sql, SQLStatement ast, SQLBinaryOperator op, SQLExpr injectCondition,
                                         boolean appendConditionToLeft, ExistInjectConditionStrategyEnum existInjectConditionStrategyEnum,
                                         BiPredicate<String, String> skip, Predicate<SQLCondition> isJoinUniqueKey, Collection<SQLExpr> excludeInjectCondition) {
@@ -420,21 +445,25 @@ public class ASTDruidConditionUtil {
             return false;
         }
 
+        boolean needPrepared = true;
+        Set<String> cantSpecifyTargetTableNameSet = new HashSet<>(1);
         Map<String, SQLExprTableSource> tableAliasMap = new HashMap<>(3);
         List<SQLName> injectConditionColumnList;
         switch (existInjectConditionStrategyEnum) {
             case ANY_TABLE_MATCH_THEN_SKIP_SQL: {
                 injectConditionColumnList = flatColumnList(injectCondition);
-                if (existInjectConditionAndPreparedTableAliasMap(ast, injectConditionColumnList, (schema, tableName) -> false, tableAliasMap)) {
+                if (existInjectConditionAndPreparedCollect(ast, injectConditionColumnList, (schema, tableName) -> false, tableAliasMap)) {
                     return false;
                 }
+                needPrepared = false;
                 break;
             }
             case RULE_TABLE_MATCH_THEN_SKIP_SQL: {
                 injectConditionColumnList = flatColumnList(injectCondition);
-                if (existInjectConditionAndPreparedTableAliasMap(ast, injectConditionColumnList, skip, tableAliasMap)) {
+                if (existInjectConditionAndPreparedCollect(ast, injectConditionColumnList, skip, tableAliasMap)) {
                     return false;
                 }
+                needPrepared = false;
                 break;
             }
             case RULE_TABLE_MATCH_THEN_SKIP_ITEM: {
@@ -449,11 +478,10 @@ public class ASTDruidConditionUtil {
         }
 
         // 减少1次遍历
-        if (tableAliasMap.isEmpty()) {
-            preparedTableAliasMap(ast, tableAliasMap);
+        if (needPrepared) {
+            preparedCollect(ast, tableAliasMap);
         }
-
-        injectCondition.accept(InjectMarkSQLASTVisitor.INSTANCE);
+        preparedCollectInject(injectCondition, cantSpecifyTargetTableNameSet);
 
         boolean[] change = new boolean[1];
         ast.accept(new SQLASTVisitorAdapter() {
@@ -468,6 +496,14 @@ public class ASTDruidConditionUtil {
                     return true;
                 }
                 return !update && !delete;
+            }
+
+            /**
+             * 是否是里所说的update: 1093 - You can't specify target table 'xx' for update in FROM clause
+             * @return true=是
+             */
+            private boolean isCantSpecifyTargetTableUpdate() {
+                return update || delete;
             }
 
             @Override
@@ -505,6 +541,10 @@ public class ASTDruidConditionUtil {
                         }
                     }
                 }
+                // 2.跳过 1093 - You can't specify target table 'xx' for update in FROM clause
+                if (isCantSpecifyTargetTableForUpdateInFromClause(tableName, cantSpecifyTargetTableNameSet, isCantSpecifyTargetTableUpdate())) {
+                    return false;
+                }
                 // 3.拼条件
                 statement.setWhere(mergeCondition(op, injectCondition, alias, appendConditionToLeft, where));
                 return true;
@@ -520,32 +560,35 @@ public class ASTDruidConditionUtil {
 
             @Override
             public void endVisit(SQLSelectQueryBlock statement) {
-                if (isInjectCondition(statement)) {
-                    return;
+                try {
+                    if (isInjectCondition(statement)) {
+                        return;
+                    }
+                    SQLTableSource from = statement.getFrom();
+                    if (from == null || isSubqueryOrUnion(from)) {
+                        return;
+                    }
+                    String tableSchema = getTableSchema(from);
+                    String tableName = getTableName(from);
+                    if (skip.test(tableSchema, tableName)) {
+                        return;
+                    }
+                    String alias = getAlias(from);
+                    JoinTypeEnum joinTypeEnum;
+                    SQLExpr fromCondition;
+                    if (from instanceof SQLJoinTableSource) {
+                        joinTypeEnum = isLeftJoin(alias, (SQLJoinTableSource) from) ? JoinTypeEnum.LEFT_OUTER_JOIN : JoinTypeEnum.RIGHT_OUTER_JOIN;
+                        fromCondition = getCondition(from);
+                    } else {
+                        joinTypeEnum = null;
+                        fromCondition = null;
+                    }
+                    if (addWhere(statement, alias, tableSchema, tableName, SQLCondition.TypeEnum.WHERE, joinTypeEnum, fromCondition)) {
+                        change[0] = true;
+                    }
+                } finally {
+                    select = false;
                 }
-                SQLTableSource from = statement.getFrom();
-                if (from == null || isSubqueryOrUnion(from)) {
-                    return;
-                }
-                String tableSchema = getTableSchema(from);
-                String tableName = getTableName(from);
-                if (skip.test(tableSchema, tableName)) {
-                    return;
-                }
-                String alias = getAlias(from);
-                JoinTypeEnum joinTypeEnum;
-                SQLExpr fromCondition;
-                if (from instanceof SQLJoinTableSource) {
-                    joinTypeEnum = isLeftJoin(alias, (SQLJoinTableSource) from) ? JoinTypeEnum.LEFT_OUTER_JOIN : JoinTypeEnum.RIGHT_OUTER_JOIN;
-                    fromCondition = getCondition(from);
-                } else {
-                    joinTypeEnum = null;
-                    fromCondition = null;
-                }
-                if (addWhere(statement, alias, tableSchema, tableName, SQLCondition.TypeEnum.WHERE, joinTypeEnum, fromCondition)) {
-                    change[0] = true;
-                }
-                select = false;
             }
 
             private boolean isLeftJoin(String selectAlias, SQLJoinTableSource from) {
@@ -628,6 +671,10 @@ public class ASTDruidConditionUtil {
                             return false;
                         }
                     }
+                }
+                // 2.跳过 1093 - You can't specify target table 'xx' for update in FROM clause
+                if (isCantSpecifyTargetTableForUpdateInFromClause(tableName, cantSpecifyTargetTableNameSet, isCantSpecifyTargetTableUpdate())) {
+                    return false;
                 }
                 // 3.拼条件
                 join.setCondition(mergeCondition(op, injectCondition, alias, appendConditionToLeft, condition));
@@ -756,35 +803,45 @@ public class ASTDruidConditionUtil {
 
             @Override
             public void endVisit(SQLDeleteStatement statement) {
-                delete = false;
+                try {
+                    LinkedList<SQLTableSource> temp = new LinkedList<>();
+                    temp.add(statement.getTableSource());
+                    while (!temp.isEmpty()) {
+                        SQLTableSource tableSource = temp.removeFirst();
+                        if (tableSource == null) {
+                            continue;
+                        }
 
-                LinkedList<SQLTableSource> temp = new LinkedList<>();
-                temp.add(statement.getTableSource());
-                while (!temp.isEmpty()) {
-                    SQLTableSource tableSource = temp.removeFirst();
-                    if (tableSource == null) {
-                        continue;
+                        if (tableSource instanceof SQLJoinTableSource) {
+                            temp.add(((SQLJoinTableSource) tableSource).getLeft());
+                            temp.add(((SQLJoinTableSource) tableSource).getRight());
+                        } else {
+                            SQLExpr where = statement.getWhere();
+                            if (isInjectCondition(where)) {
+                                continue;
+                            }
+                            if (isSubqueryOrUnion(tableSource)) {
+                                continue;
+                            }
+                            String tableName = getTableName(tableSource);
+                            if (skip.test(getTableSchema(tableSource), tableName)) {
+                                continue;
+                            }
+                            String alias = getAlias(tableSource);
+                            if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
+                                    && existInjectCondition(injectConditionColumnList, alias, where)) {
+                                continue;
+                            }
+                            // 2.跳过 1093 - You can't specify target table 'xx' for update in FROM clause
+                            if (isCantSpecifyTargetTableForUpdateInFromClause(tableName, cantSpecifyTargetTableNameSet, true)) {
+                                continue;
+                            }
+                            statement.setWhere(mergeCondition(op, injectCondition, alias, appendConditionToLeft, where));
+                            change[0] = true;
+                        }
                     }
-
-                    if (tableSource instanceof SQLJoinTableSource) {
-                        temp.add(((SQLJoinTableSource) tableSource).getLeft());
-                        temp.add(((SQLJoinTableSource) tableSource).getRight());
-                    } else {
-                        SQLExpr where = statement.getWhere();
-                        if (isInjectCondition(where)) {
-                            continue;
-                        }
-                        if (isSubqueryOrUnion(tableSource) || skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
-                            continue;
-                        }
-                        String alias = getAlias(tableSource);
-                        if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
-                                && existInjectCondition(injectConditionColumnList, alias, where)) {
-                            continue;
-                        }
-                        statement.setWhere(mergeCondition(op, injectCondition, alias, appendConditionToLeft, where));
-                        change[0] = true;
-                    }
+                } finally {
+                    delete = false;
                 }
             }
 
@@ -796,39 +853,61 @@ public class ASTDruidConditionUtil {
 
             @Override
             public void endVisit(SQLUpdateStatement statement) {
-                update = false;
+                try {
+                    LinkedList<SQLTableSource> temp = new LinkedList<>();
+                    temp.add(statement.getTableSource());
+                    while (!temp.isEmpty()) {
+                        SQLTableSource tableSource = temp.removeFirst();
+                        if (tableSource == null) {
+                            continue;
+                        }
 
-                LinkedList<SQLTableSource> temp = new LinkedList<>();
-                temp.add(statement.getTableSource());
-                while (!temp.isEmpty()) {
-                    SQLTableSource tableSource = temp.removeFirst();
-                    if (tableSource == null) {
-                        continue;
+                        if (tableSource instanceof SQLJoinTableSource) {
+                            temp.add(((SQLJoinTableSource) tableSource).getLeft());
+                            temp.add(((SQLJoinTableSource) tableSource).getRight());
+                        } else {
+                            SQLExpr where = statement.getWhere();
+                            if (isInjectCondition(where)) {
+                                continue;
+                            }
+                            String alias = getAlias(tableSource);
+                            if (isSubqueryOrUnion(tableSource)) {
+                                continue;
+                            }
+                            String tableName = getTableName(tableSource);
+                            if (skip.test(getTableSchema(tableSource), tableName)) {
+                                continue;
+                            }
+                            if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
+                                    && existInjectCondition(injectConditionColumnList, alias, where)) {
+                                continue;
+                            }
+                            // 2.跳过 1093 - You can't specify target table 'xx' for update in FROM clause
+                            if (isCantSpecifyTargetTableForUpdateInFromClause(tableName, cantSpecifyTargetTableNameSet, true)) {
+                                continue;
+                            }
+                            statement.setWhere(mergeCondition(op, injectCondition, alias, appendConditionToLeft, where));
+                            change[0] = true;
+                        }
                     }
-
-                    if (tableSource instanceof SQLJoinTableSource) {
-                        temp.add(((SQLJoinTableSource) tableSource).getLeft());
-                        temp.add(((SQLJoinTableSource) tableSource).getRight());
-                    } else {
-                        SQLExpr where = statement.getWhere();
-                        if (isInjectCondition(where)) {
-                            continue;
-                        }
-                        String alias = getAlias(tableSource);
-                        if (isSubqueryOrUnion(tableSource) || skip.test(getTableSchema(tableSource), getTableName(tableSource))) {
-                            continue;
-                        }
-                        if (existInjectConditionStrategyEnum == ExistInjectConditionStrategyEnum.RULE_TABLE_MATCH_THEN_SKIP_ITEM
-                                && existInjectCondition(injectConditionColumnList, alias, where)) {
-                            continue;
-                        }
-                        statement.setWhere(mergeCondition(op, injectCondition, alias, appendConditionToLeft, where));
-                        change[0] = true;
-                    }
+                } finally {
+                    update = false;
                 }
             }
         });
         return change[0];
+    }
+
+    /**
+     * 是否存在这种情况：1093 - You can't specify target table 'xx' for update in FROM clause
+     *
+     * @param tableName                   当前from的表名
+     * @param injectConditionTableNameSet 注入的嵌套表
+     * @param update                      是否是update
+     * @return 存在 1093 - You can't specify target table 'xx' for update in FROM clause
+     */
+    private static boolean isCantSpecifyTargetTableForUpdateInFromClause(String tableName, Set<String> injectConditionTableNameSet, boolean update) {
+        return update && injectConditionTableNameSet.contains(tableName);
     }
 
     private static List<SQLName> flatColumnList(SQLExpr injectCondition) {

@@ -1220,6 +1220,9 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void delete() {
+        String delete21 = ASTDruidTestUtil.addAndCondition("DELETE FROM task ", " userId in (SELECT userId FROM task WHERE name ='w')");
+        Assert.assertEquals("DELETE FROM task ", delete21);
+
         String delete1 = ASTDruidTestUtil.addAndCondition("delete from user", "tenant_id = 2");
         Assert.assertEquals("DELETE FROM user\n" +
                 "WHERE user.tenant_id = 2", delete1);
