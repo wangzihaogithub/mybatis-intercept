@@ -35,34 +35,39 @@ public class ASTDruidConditionUtil {
         SQLExpr injectConditionExpr = SQLUtils.toSQLExpr(injectCondition, getDbType(null));
         List<String> list = new ArrayList<>();
         injectConditionExpr.accept(new SQLASTVisitorAdapter() {
-            boolean select;
 
             @Override
-            public boolean visit(SQLSelectQueryBlock statement) {
-                select = true;
-                return true;
+            public boolean visit(SQLInSubQueryExpr statement) {
+                SQLExpr expr = statement.getExpr();
+                String name;
+                if (expr instanceof SQLPropertyExpr) {
+                    name = ((SQLPropertyExpr) expr).getName();
+                } else if (expr instanceof SQLIdentifierExpr) {
+                    name = ((SQLIdentifierExpr) expr).getName();
+                } else {
+                    return false;
+                }
+                String col = normalize(name);
+                list.add(col);
+                return false;
             }
 
             @Override
-            public void endVisit(SQLSelectQueryBlock x) {
-                select = false;
+            public boolean visit(SQLSelectQueryBlock statement) {
+                return false;
             }
 
             @Override
             public boolean visit(SQLPropertyExpr x) {
-                if (!select) {
-                    String col = normalize(x.getName());
-                    list.add(col);
-                }
+                String col = normalize(x.getName());
+                list.add(col);
                 return true;
             }
 
             @Override
             public boolean visit(SQLIdentifierExpr x) {
-                if (!select) {
-                    String col = normalize(x.getName());
-                    list.add(col);
-                }
+                String col = normalize(x.getName());
+                list.add(col);
                 return true;
             }
         });
