@@ -63,6 +63,82 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+
+        String injectCondiwsstdffionNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend(" select distinct t.id from\n" +
+                        "        biz_task t\n" +
+                        "        inner join pipeline_todo_task t1 on t.id = t1.task_id\n" +
+                        "        inner join pipeline_todo t2 on t2.id = t1.todo_id\n" +
+                        "        where t2.pipeline_id = ?\n" +
+                        "         \n" +
+                        "            and t2.todo_type = ?\n" +
+                        "         \n" +
+                        "         \n" +
+                        "            and t2.inter_flag = ?\n" +
+                        "         \n" +
+                        "\n" +
+                        "         \n" +
+                        "            and t2.interview_step = ?\n" +
+                        "         \n" +
+                        "         \n" +
+                        "        AND t2.delete_flag = 0\n" +
+                        "        AND t2.todo_flag = 1\n" +
+                        "        and t.finish_flag = false\n" +
+                        "        and t.delete_flag = 0",
+                "                          tenant_id in (                 select source_tenant_id from pipeline_talent_corresponding_relation where pipeline_id = 49617 and target_tenant_id = 1                 UNION                 select target_tenant_id from pipeline_talent_corresponding_relation where pipeline_id = 49617 and source_tenant_id = 1                 UNION                 select 1             )");
+        Assert.assertEquals("SELECT DISTINCT t.id\n" +
+                "FROM biz_task t\n" +
+                "\tINNER JOIN pipeline_todo_task t1\n" +
+                "\tON t.id = t1.task_id\n" +
+                "\t\tAND t1.tenant_id IN (\n" +
+                "\t\t\tSELECT source_tenant_id\n" +
+                "\t\t\tFROM pipeline_talent_corresponding_relation\n" +
+                "\t\t\tWHERE pipeline_id = 49617\n" +
+                "\t\t\t\tAND target_tenant_id = 1\n" +
+                "\t\t\tUNION\n" +
+                "\t\t\tSELECT target_tenant_id\n" +
+                "\t\t\tFROM pipeline_talent_corresponding_relation\n" +
+                "\t\t\tWHERE pipeline_id = 49617\n" +
+                "\t\t\t\tAND source_tenant_id = 1\n" +
+                "\t\t\tUNION\n" +
+                "\t\t\tSELECT 1\n" +
+                "\t\t)\n" +
+                "\tINNER JOIN pipeline_todo t2\n" +
+                "\tON t2.id = t1.todo_id\n" +
+                "\t\tAND t2.tenant_id IN (\n" +
+                "\t\t\tSELECT source_tenant_id\n" +
+                "\t\t\tFROM pipeline_talent_corresponding_relation\n" +
+                "\t\t\tWHERE pipeline_id = 49617\n" +
+                "\t\t\t\tAND target_tenant_id = 1\n" +
+                "\t\t\tUNION\n" +
+                "\t\t\tSELECT target_tenant_id\n" +
+                "\t\t\tFROM pipeline_talent_corresponding_relation\n" +
+                "\t\t\tWHERE pipeline_id = 49617\n" +
+                "\t\t\t\tAND source_tenant_id = 1\n" +
+                "\t\t\tUNION\n" +
+                "\t\t\tSELECT 1\n" +
+                "\t\t)\n" +
+                "WHERE t2.pipeline_id = ?\n" +
+                "\tAND t2.todo_type = ?\n" +
+                "\tAND t2.inter_flag = ?\n" +
+                "\tAND t2.interview_step = ?\n" +
+                "\tAND t2.delete_flag = 0\n" +
+                "\tAND t2.todo_flag = 1\n" +
+                "\tAND t.finish_flag = false\n" +
+                "\tAND t.delete_flag = 0\n" +
+                "\tAND t.tenant_id IN (\n" +
+                "\t\tSELECT source_tenant_id\n" +
+                "\t\tFROM pipeline_talent_corresponding_relation\n" +
+                "\t\tWHERE pipeline_id = 49617\n" +
+                "\t\t\tAND target_tenant_id = 1\n" +
+                "\t\tUNION\n" +
+                "\t\tSELECT target_tenant_id\n" +
+                "\t\tFROM pipeline_talent_corresponding_relation\n" +
+                "\t\tWHERE pipeline_id = 49617\n" +
+                "\t\t\tAND source_tenant_id = 1\n" +
+                "\t\tUNION\n" +
+                "\t\tSELECT 1\n" +
+                "\t)", injectCondiwsstdffionNdfq2);
+
         String injectCondiwtdffionNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend("SELECT t1.id, t1.name_en AS nameEn, ifnull(status, 2) AS status\n" +
                         "\t, name_cn AS nameCn, head_pic AS headPic, dept_id AS deptId\n" +
                         "        FROM p_auth t\n" +
@@ -111,7 +187,7 @@ public class ASTDruidConditionUtilTest {
                 "FROM p_auth t\n" +
                 "\tINNER JOIN p_user t1\n" +
                 "\tON t.`trustor_id` = t1.id\n" +
-                "\t\tAND t1.`trust_type` = 0\n" +
+                "\t\tAND t.`trust_type` = 0\n" +
                 "\t\tAND t1.id IN (\n" +
                 "\t\t\tSELECT pm_uid\n" +
                 "\t\t\tFROM biz_position_pm\n" +
@@ -125,8 +201,8 @@ public class ASTDruidConditionUtilTest {
                 "\t\t\tSELECT position_tenant_id\n" +
                 "\t\t\tFROM biz_position_open_tenant\n" +
                 "\t\t\tWHERE share_tenant_id = 45\n" +
-                "\t\t\t\tAND biz_position_open_tenant.delete_flag = false\n" +
-                "\t\t\t\tAND biz_position_open_tenant.biz_position_id = 34398\n" +
+                "\t\t\t\tAND delete_flag = false\n" +
+                "\t\t\t\tAND biz_position_id = 34398\n" +
                 "\t\t\t\tAND biz_position_open_tenant.id IN (\n" +
                 "\t\t\t\t\tSELECT pm_uid\n" +
                 "\t\t\t\t\tFROM biz_position_pm\n" +
@@ -146,14 +222,14 @@ public class ASTDruidConditionUtilTest {
                 "FROM p_auth t\n" +
                 "\tINNER JOIN p_user t1\n" +
                 "\tON t.`trustor_id` = t1.dept_id\n" +
-                "\t\tAND t1.`trust_type` = 1\n" +
+                "\t\tAND t.`trust_type` = 1\n" +
                 "\t\tAND (t1.tenant_id = 45\n" +
                 "\t\t\tOR t1.tenant_id IN (\n" +
                 "\t\t\t\tSELECT position_tenant_id\n" +
                 "\t\t\t\tFROM biz_position_open_tenant\n" +
                 "\t\t\t\tWHERE share_tenant_id = 45\n" +
-                "\t\t\t\t\tAND biz_position_open_tenant.delete_flag = false\n" +
-                "\t\t\t\t\tAND biz_position_open_tenant.biz_position_id = 34398\n" +
+                "\t\t\t\t\tAND delete_flag = false\n" +
+                "\t\t\t\t\tAND biz_position_id = 34398\n" +
                 "\t\t\t\t\tAND biz_position_open_tenant.id IN (\n" +
                 "\t\t\t\t\t\tSELECT pm_uid\n" +
                 "\t\t\t\t\t\tFROM biz_position_pm\n" +
@@ -174,8 +250,8 @@ public class ASTDruidConditionUtilTest {
                 "\t\t\tSELECT position_tenant_id\n" +
                 "\t\t\tFROM biz_position_open_tenant\n" +
                 "\t\t\tWHERE share_tenant_id = 45\n" +
-                "\t\t\t\tAND biz_position_open_tenant.delete_flag = false\n" +
-                "\t\t\t\tAND biz_position_open_tenant.biz_position_id = 34398\n" +
+                "\t\t\t\tAND delete_flag = false\n" +
+                "\t\t\t\tAND biz_position_id = 34398\n" +
                 "\t\t\t\tAND biz_position_open_tenant.id IN (\n" +
                 "\t\t\t\t\tSELECT pm_uid\n" +
                 "\t\t\t\t\tFROM biz_position_pm\n" +
@@ -276,7 +352,7 @@ public class ASTDruidConditionUtilTest {
                 "ORDER BY STATUS, CONVERT(nameEn USING gbk)", injectCondiwtdionNdfq2);
 
 
-        String injectConditdionNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ? and (tenant_id =1 or tenant_id in (select tenant_id from tenant_scope ))",
+        String injectConditdionNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend("SELECT *  FROM   p_user pu  LEFT JOIN p_dept pd ON pu.dept_id = pd.id where pu.id = ? and (pu.tenant_id =1 or tenant_id in (select tenant_id from tenant_scope ))",
                 "id in (1,2)",
                 "tenant_id =1 or tenant_id in (select tenant_id from tenant_scope )");
         Assert.assertEquals("SELECT *\n" +
@@ -286,9 +362,10 @@ public class ASTDruidConditionUtilTest {
                 "\t\tAND id IN (1, 2)\n" +
                 "WHERE pu.id = ?\n" +
                 "\tAND (pu.tenant_id = 1\n" +
-                "\t\tOR pu.tenant_id IN (\n" +
+                "\t\tOR tenant_id IN (\n" +
                 "\t\t\tSELECT tenant_id\n" +
                 "\t\t\tFROM tenant_scope\n" +
+                "\t\t\tWHERE id IN (1, 2)\n" +
                 "\t\t))\n" +
                 "\tAND id IN (1, 2)", injectConditdionNdfq2);
 

@@ -415,24 +415,9 @@ public class ASTDruidConditionUtil {
 
     private static void preparedCollectInject(SQLExpr injectCondition, Set<String> cantSpecifyTargetTableNameSet) {
         injectCondition.accept(new InjectMarkSQLASTVisitor() {
-            private boolean sqlInSubQuery;
-
-            @Override
-            public boolean visit(SQLInSubQueryExpr expr) {
-                this.sqlInSubQuery = true;
-                return true;
-            }
-
-            @Override
-            public void endVisit(SQLInSubQueryExpr expr) {
-                this.sqlInSubQuery = false;
-            }
-
             @Override
             public boolean visit(SQLExprTableSource tableSource) {
-                if (sqlInSubQuery) {
-                    cantSpecifyTargetTableNameSet.add(getTableName(tableSource));
-                }
+                cantSpecifyTargetTableNameSet.add(getTableName(tableSource));
                 return true;
             }
         });
@@ -1085,9 +1070,9 @@ public class ASTDruidConditionUtil {
                 result = left ? new SQLBinaryOpExpr(injectConditionAlias, op, where) : new SQLBinaryOpExpr(where, op, injectConditionAlias);
             }
         } else {
-            injectCondition.accept(InjectMarkSQLASTVisitor.INSTANCE);
             result = alias == null ?
                     injectCondition : left ? mergeConditionIfExistAlias(injectCondition, where, op, alias, true) : mergeConditionIfExistAlias(where, injectCondition, op, alias, false);
+            injectCondition.accept(InjectMarkSQLASTVisitor.INSTANCE);
         }
         return result;
     }
@@ -1100,7 +1085,11 @@ public class ASTDruidConditionUtil {
 
         if (left instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr expr = (SQLBinaryOpExpr) left;
-            newLeft = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias, leftAppend ? null : false);
+            if (leftAppend) {
+                newLeft = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias, null);
+            } else {
+                newLeft = left.clone();
+            }
         } else if (left instanceof SQLName) {
             if (leftAppend) {
                 newLeft = new SQLPropertyExpr(conditionAlias, ((SQLName) left).getSimpleName());
@@ -1116,7 +1105,11 @@ public class ASTDruidConditionUtil {
 
         if (right instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr expr = (SQLBinaryOpExpr) right;
-            newRight = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias, rightAppend ? null : false);
+            if (rightAppend) {
+                newRight = mergeConditionIfExistAlias(expr.getLeft(), expr.getRight(), expr.getOperator(), conditionAlias, null);
+            } else {
+                newRight = right.clone();
+            }
         } else if (right instanceof SQLIdentifierExpr) {
             if (rightAppend) {
                 newRight = new SQLPropertyExpr(conditionAlias, ((SQLName) right).getSimpleName());
