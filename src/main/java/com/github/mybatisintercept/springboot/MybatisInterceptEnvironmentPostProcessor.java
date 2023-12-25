@@ -48,8 +48,10 @@ public class MybatisInterceptEnvironmentPostProcessor implements EnvironmentPost
                     }
                     result.put(key, placeholderValue);
                 }
-            } catch (Exception ignored) {
-
+            } catch (Exception e) {
+                if (!PlatformDependentUtil.logError(MybatisInterceptEnvironmentPostProcessor.class, "resolvePlaceholders error = {}", e.toString(), e)) {
+                    e.printStackTrace();
+                }
             }
         }
         return result != null ? result : properties;

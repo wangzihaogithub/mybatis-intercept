@@ -9,7 +9,8 @@ public class TableUniqueIndex {
     private final List<String> columnNameList;
 
     public TableUniqueIndex(List<String> columnNameList) {
-        this(PRIMARY_NAME, columnNameList);
+        this.indexName = PRIMARY_NAME;
+        this.columnNameList = columnNameList;
     }
 
     public TableUniqueIndex(String indexName, List<String> columnNameList) {
@@ -30,16 +31,11 @@ public class TableUniqueIndex {
         if (this == o) {
             return true;
         }
-        if (o == null || getClass() != o.getClass()) {
+        if (!(o instanceof TableUniqueIndex)) {
             return false;
         }
-
         TableUniqueIndex that = (TableUniqueIndex) o;
-
-        if (!Objects.equals(indexName, that.indexName)) {
-            return false;
-        }
-        return Objects.equals(columnNameList, that.columnNameList);
+        return Objects.equals(indexName, that.indexName) && Objects.equals(columnNameList, that.columnNameList);
     }
 
     @Override

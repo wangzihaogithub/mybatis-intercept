@@ -24,6 +24,21 @@ public class SQL {
         }
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SQL sql = (SQL) o;
+        return Objects.equals(sourceSql, sql.sourceSql) && Objects.equals(exprSql, sql.exprSql) && Arrays.equals(args, sql.args) && Objects.equals(argNameAndDefaultValues, sql.argNameAndDefaultValues) && Objects.equals(placeholders, sql.placeholders) && Objects.equals(argsMap, sql.argsMap);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(sourceSql, exprSql, argNameAndDefaultValues, placeholders, argsMap);
+        result = 31 * result + Arrays.hashCode(args);
+        return result;
+    }
+
     public String getSourceSql() {
         return sourceSql;
     }
@@ -48,6 +63,10 @@ public class SQL {
         return exprSql;
     }
 
+    public static SQL compile(String expressionsSql) {
+        return compile(expressionsSql, e -> null, false);
+    }
+
     public static SQL compile(String expressionsSql, Map<String, Object> getter) {
         return compile(expressionsSql, getter::get);
     }
@@ -59,7 +78,7 @@ public class SQL {
      * @param getter         参数
      * @return JDBC所需的sql对象
      */
-    public static SQL compile(String expressionsSql, Function<String, Object> getter) {
+    public static SQL compile(String expressionsSql, Function<String, Object> getter, boolean getterNotnull) {
         String expressionsSqlCopy = expressionsSql;
         List<Placeholder> placeholderList = new ArrayList<>();
         Queue<Placeholder> placeholderQueue = getPlaceholderQueue(expressionsSqlCopy, '#');
@@ -70,6 +89,9 @@ public class SQL {
         while ((placeholder = placeholderQueue.poll()) != null) {
             placeholderList.add(placeholder);
             Object value = getter.apply(placeholder.argName);
+            if (getterNotnull && value == null) {
+                return null;
+            }
             placeholder.value = cast(value);
             int offset = expressionsSqlCopy.length() - sqlBuffer.length();
             int offsetBegin = placeholder.placeholder.getBegin() - PLACEHOLDER_BEGIN.length() - offset - 1;
@@ -84,6 +106,9 @@ public class SQL {
         while ((placeholder = placeholderQueue.poll()) != null) {
             placeholderList.add(placeholder);
             Object value = getter.apply(placeholder.argName);
+            if (getterNotnull && value == null) {
+                return null;
+            }
             placeholder.value = cast(value);
             int offset = expressionsSqlCopy.length() - sqlBuffer.length();
             int offsetBegin = placeholder.placeholder.getBegin() - PLACEHOLDER_BEGIN.length() - offset - 1;
@@ -98,6 +123,15 @@ public class SQL {
 
     private static Object cast(Object value) {
         return value;
+    }
+
+    public static SQL compile(String expressionsSql, Function<String, Object> getter) {
+        return compile(expressionsSql, getter, false);
+    }
+
+    public static String compileString(String expressionsSql, Function<String, Object> getter, boolean getterNotnull) {
+        SQL sql = compile(expressionsSql, getter, getterNotnull);
+        return sql == null ? null : sql.getExprSql();
     }
 
     /**
@@ -171,9 +205,10 @@ public class SQL {
 
     /**
      * Zero memory copy String Method.
+     *
      * @author wangzihaogithub
      */
-    public static class Substring implements CharSequence,Comparable<CharSequence>,Cloneable {
+    public static class Substring implements CharSequence, Comparable<CharSequence>, Cloneable {
         private String source;
         private int begin;
         private int end;
@@ -197,15 +232,15 @@ public class SQL {
         }
 
         public void setBegin(int begin) {
-            if(this.begin != begin){
+            if (this.begin != begin) {
                 this.hash = 0;
                 this.begin = begin;
             }
         }
 
         public void setEnd(int end) {
-            if(this.end < end){
-                if(this.hash != 0) {
+            if (this.end < end) {
+                if (this.hash != 0) {
                     int h = hash;
                     for (int i = this.end; i < end; i++) {
                         h = 31 * h + source.charAt(i);
@@ -213,7 +248,7 @@ public class SQL {
                     this.hash = h;
                 }
                 this.end = end;
-            }else if(this.end > end){
+            } else if (this.end > end) {
                 this.hash = 0;
                 this.end = end;
             }
@@ -233,20 +268,20 @@ public class SQL {
 
         @Override
         public boolean equals(Object obj) {
-            if(obj instanceof Substring) {
+            if (obj instanceof Substring) {
                 Substring that = (Substring) obj;
                 return equals(that.source, that.begin, that.end, source, begin, end);
-            }else if(obj instanceof CharSequence) {
+            } else if (obj instanceof CharSequence) {
                 CharSequence that = (CharSequence) obj;
-                return equals(that,0,that.length(), source, begin, end);
-            }else {
+                return equals(that, 0, that.length(), source, begin, end);
+            } else {
                 return false;
             }
         }
 
         @Override
         public String toString() {
-            return source.substring(begin,end);
+            return source.substring(begin, end);
         }
 
         @Override
@@ -273,14 +308,14 @@ public class SQL {
             return clone;
         }
 
-        private static boolean equals(CharSequence str1, int begin1, int end1, CharSequence str2, int begin2, int end2){
-            if(end2 - begin2 != end1 - begin1){
+        private static boolean equals(CharSequence str1, int begin1, int end1, CharSequence str2, int begin2, int end2) {
+            if (end2 - begin2 != end1 - begin1) {
                 return false;
             }
-            for (int i = begin1,j = begin2; i < end1; i++,j++) {
+            for (int i = begin1, j = begin2; i < end1; i++, j++) {
                 char c1 = str2.charAt(j);
                 char c2 = str1.charAt(i);
-                if(c1 != c2){
+                if (c1 != c2) {
                     return false;
                 }
             }
@@ -299,7 +334,7 @@ public class SQL {
 
         @Override
         public CharSequence subSequence(int start, int end) {
-            return new Substring(source,begin + start,begin + end);
+            return new Substring(source, begin + start, begin + end);
         }
 
         public int getBegin() {

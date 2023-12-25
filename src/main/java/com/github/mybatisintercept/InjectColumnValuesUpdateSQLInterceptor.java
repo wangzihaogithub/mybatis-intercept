@@ -1,6 +1,5 @@
 package com.github.mybatisintercept;
 
-import com.github.mybatisintercept.util.MysqlMissColumnDataSourceConsumer;
 import com.github.mybatisintercept.util.*;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
@@ -26,9 +25,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
     private StaticMethodAccessor<InterceptContext> valueProvider;
     private Set<ColumnMapping> columnMappings;
     private String dbType;
-    private BiPredicate<String, String> skipPredicate = (schema, tableName) -> {
-        return skipTableNames.contains(tableName);
-    };
+    private BiPredicate<String, String> skipPredicate = (schema, tableName) -> skipTableNames.contains(tableName);
     private Properties properties;
 
     public static InterceptContext getInterceptContext() {
@@ -84,10 +81,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         }
     }
 
-    public void initIfNeed() {
-        if (!initFlag.compareAndSet(false, true)) {
-            return;
-        }
+    private Properties getProperties() {
         Properties properties = this.properties;
         if (properties == null || properties.isEmpty()) {
             properties = System.getProperties();
@@ -95,49 +89,55 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         if (PlatformDependentUtil.SPRING_ENVIRONMENT_READY) {
             properties = PlatformDependentUtil.resolveSpringPlaceholders(properties, "InjectColumnValuesUpdateSQLInterceptor.");
         }
-        String valueProvider = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
-        String dbType = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.dbType", "mysql");
+        return properties;
+    }
+
+    public void initIfNeed() {
+        if (!initFlag.compareAndSet(false, true)) {
+            return;
+        }
+        Properties properties = getProperties();
+        String valueProviderString = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.valueProvider", "com.github.securityfilter.util.AccessUserUtil#getAccessUserValue");
+        String dbTypeString = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.dbType", "mysql");
         // 格式：valueProviderGetterPropertyName=persistentObjectSetterPropertyName1,persistentObjectSetterPropertyName2
-        String columnMappings = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.columnMappings", "tenantId=tenantId"); // tenantId=tenantId,tenantId
-        String interceptPackageNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
-        String skipTableNames = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.skipTableNames", "");
+        String columnMappingsString = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.columnMappings", "tenantId=tenantId"); // tenantId=tenantId,tenantId
+        String interceptPackageNamesString = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.interceptPackageNames", ""); // 空字符=不限制，全拦截
+        String skipTableNamesString = properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.skipTableNames", "");
         boolean enabledDatasourceSelect = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.enabledDatasourceSelect", "true"));
         boolean datasourceSelectErrorThenShutdown = "true".equalsIgnoreCase(properties.getProperty("InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown", "true"));
 
-        this.valueProvider = new StaticMethodAccessor<>(valueProvider);
-        this.dbType = dbType;
-        this.columnMappings = ColumnMapping.parse(columnMappings);
-        if (interceptPackageNames.trim().length() > 0) {
-            this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
+        this.valueProvider = new StaticMethodAccessor<>(valueProviderString);
+        this.dbType = dbTypeString;
+        this.columnMappings = ColumnMapping.parse(columnMappingsString);
+        if (interceptPackageNamesString.trim().length() > 0) {
+            this.interceptPackageNames.addAll(Arrays.stream(interceptPackageNamesString.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
-        if (skipTableNames.trim().length() > 0) {
-            this.skipTableNames.addAll(Arrays.stream(skipTableNames.trim().split(",")).map(String::trim).collect(Collectors.toList()));
+        if (skipTableNamesString.trim().length() > 0) {
+            this.skipTableNames.addAll(Arrays.stream(skipTableNamesString.trim().split(",")).map(String::trim).collect(Collectors.toList()));
         }
 
-        if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect) {
-            if (PlatformDependentUtil.isMysql(dbType)) {
-                Set<Set<String>> columnListList = new LinkedHashSet<>();
-                columnListList.add(this.columnMappings.stream()
-                        .flatMap(e -> Stream.of(TypeUtil.humpToLine(e.persistentObjectSetterPropertyName), TypeUtil.humpToLine(e.persistentObjectSetterPropertyName)))
-                        .collect(Collectors.toSet()));
-                columnListList.add(this.columnMappings.stream()
-                        .flatMap(e -> Stream.of(TypeUtil.lineToHump(e.persistentObjectSetterPropertyName), TypeUtil.lineToHump(e.persistentObjectSetterPropertyName)))
-                        .collect(Collectors.toSet()));
-                PlatformDependentUtil.onSpringDatasourceReady(new MysqlMissColumnDataSourceConsumer(columnListList) {
-                    @Override
-                    public void onSelectEnd(Set<String> missColumnTableList) {
-                        InjectColumnValuesUpdateSQLInterceptor.this.skipTableNames.addAll(missColumnTableList);
-                    }
+        if (PlatformDependentUtil.EXIST_SPRING_BOOT && enabledDatasourceSelect && PlatformDependentUtil.isMysql(dbTypeString)) {
+            Set<Set<String>> columnListList = new LinkedHashSet<>();
+            columnListList.add(this.columnMappings.stream()
+                    .flatMap(e -> Stream.of(TypeUtil.humpToLine(e.persistentObjectSetterPropertyName), TypeUtil.humpToLine(e.persistentObjectSetterPropertyName)))
+                    .collect(Collectors.toSet()));
+            columnListList.add(this.columnMappings.stream()
+                    .flatMap(e -> Stream.of(TypeUtil.lineToHump(e.persistentObjectSetterPropertyName), TypeUtil.lineToHump(e.persistentObjectSetterPropertyName)))
+                    .collect(Collectors.toSet()));
+            PlatformDependentUtil.onSpringDatasourceReady(new MysqlMissColumnDataSourceConsumer(columnListList) {
+                @Override
+                public void onSelectEnd(Set<String> missColumnTableList) {
+                    InjectColumnValuesUpdateSQLInterceptor.this.skipTableNames.addAll(missColumnTableList);
+                }
 
-                    @Override
-                    public Exception onSelectException(Exception exception) {
-                        if (datasourceSelectErrorThenShutdown) {
-                            PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
-                        }
-                        return new IllegalStateException("InjectColumnValuesUpdateSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                @Override
+                public Exception onSelectException(Exception exception) {
+                    if (datasourceSelectErrorThenShutdown) {
+                        PlatformDependentUtil.onSpringDatasourceReady(unused -> System.exit(-1));
                     }
-                });
-            }
+                    return new IllegalStateException("InjectColumnValuesUpdateSQLInterceptor.skipTableNames init fail! if dont need shutdown can setting InjectConditionSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesUpdateSQLInterceptor.datasourceSelectErrorThenShutdown = false, InjectColumnValuesInsertSQLInterceptor.datasourceSelectErrorThenShutdown = false. case:" + exception, exception);
+                }
+            });
         }
     }
 
@@ -243,6 +243,7 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
     public static class InterceptContext implements com.github.mybatisintercept.InterceptContext<InjectColumnValuesUpdateSQLInterceptor> {
         private final Invocation invocation;
         private final InjectColumnValuesUpdateSQLInterceptor interceptor;
+        private Map<String, Object> attributeMap;
 
         public InterceptContext(Invocation invocation, InjectColumnValuesUpdateSQLInterceptor interceptor) {
             this.invocation = invocation;
@@ -257,6 +258,24 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         @Override
         public Invocation getInvocation() {
             return invocation;
+        }
+
+        @Override
+        public Map<String, Object> getAttributeMap() {
+            if (attributeMap == null) {
+                attributeMap = new HashMap<>(2);
+            }
+            return attributeMap;
+        }
+
+        @Override
+        public Object getAttributeValue(String name) {
+            return attributeMap == null ? null : attributeMap.get(name);
+        }
+
+        @Override
+        public StaticMethodAccessor<com.github.mybatisintercept.InterceptContext<InjectColumnValuesUpdateSQLInterceptor>> getValueProvider() {
+            return (StaticMethodAccessor) interceptor.valueProvider;
         }
     }
 }
