@@ -418,6 +418,17 @@ public class ASTDruidConditionUtil {
         });
     }
 
+    private static Set<String> getTableNameSet(SQLStatement ast) {
+        Set<String> tableNameSet = new HashSet<>(2);
+        ast.accept(new SQLASTVisitorAdapter() {
+            @Override
+            public void endVisit(SQLExprTableSource tableSource) {
+                tableNameSet.add(getTableName(tableSource));
+            }
+        });
+        return tableNameSet;
+    }
+
     private static void preparedCollectInject(SQLExpr injectCondition, Set<String> cantSpecifyTargetTableNameSet) {
         injectCondition.accept(new InjectMarkSQLASTVisitor() {
             @Override
@@ -480,6 +491,8 @@ public class ASTDruidConditionUtil {
             private boolean select;
             private boolean update;
             private boolean delete;
+            private boolean updateSetItem;
+            private String updateTableName;
 
             private boolean isSelect() {
                 if (select) {
@@ -532,7 +545,8 @@ public class ASTDruidConditionUtil {
                     }
                 }
                 // 2.跳过 1093 - You can't specify target table 'xx' for update in FROM clause
-                if (isCantSpecifyTargetTableForUpdateInFromClause(tableName, cantSpecifyTargetTableNameSet, isCantSpecifyTargetTableUpdate())) {
+                String cantSpecifyTargetTableName = updateSetItem ? updateTableName : tableName;
+                if (isCantSpecifyTargetTableForUpdateInFromClause(cantSpecifyTargetTableName, cantSpecifyTargetTableNameSet, isCantSpecifyTargetTableUpdate())) {
                     return false;
                 }
                 // 3.拼条件
@@ -663,7 +677,8 @@ public class ASTDruidConditionUtil {
                     }
                 }
                 // 2.跳过 1093 - You can't specify target table 'xx' for update in FROM clause
-                if (isCantSpecifyTargetTableForUpdateInFromClause(tableName, cantSpecifyTargetTableNameSet, isCantSpecifyTargetTableUpdate())) {
+                String cantSpecifyTargetTableName = updateSetItem ? updateTableName : tableName;
+                if (isCantSpecifyTargetTableForUpdateInFromClause(cantSpecifyTargetTableName, cantSpecifyTargetTableNameSet, isCantSpecifyTargetTableUpdate())) {
                     return false;
                 }
                 // 3.拼条件
@@ -702,7 +717,7 @@ public class ASTDruidConditionUtil {
                     SQLPropertyExpr itemColumn = (SQLPropertyExpr) left;
                     String columnOwnerName = normalize(itemColumn.getOwnernName());
                     String columnName = normalize(itemColumn.getName());
-                    SQLExprTableSource tableSource = getTableSource(columnOwnerName);
+                    SQLExprTableSource tableSource = getTableSourceByAlias(columnOwnerName);
                     if (tableSource != null && columnName != null) {
                         String tableName = getTableName(tableSource);
                         String tableSchema = getTableSchema(tableSource);
@@ -719,7 +734,7 @@ public class ASTDruidConditionUtil {
                 } else if (left instanceof SQLIdentifierExpr) {
                     SQLIdentifierExpr itemColumn = (SQLIdentifierExpr) left;
                     String columnName = normalize(itemColumn.getName());
-                    SQLExprTableSource tableSource = getTableSource(null);
+                    SQLExprTableSource tableSource = getTableSourceByAlias(null);
                     if (tableSource != null && columnName != null) {
                         String tableName = getTableName(tableSource);
                         String tableSchema = getTableSchema(tableSource);
@@ -753,7 +768,7 @@ public class ASTDruidConditionUtil {
                 } else if (right instanceof SQLIdentifierExpr) {
                     SQLIdentifierExpr itemColumn = (SQLIdentifierExpr) right;
                     String columnName = normalize(itemColumn.getName());
-                    SQLExprTableSource tableSource = getTableSource(null);
+                    SQLExprTableSource tableSource = getTableSourceByAlias(null);
                     if (tableSource != null && columnName != null) {
                         String tableName = getTableName(tableSource);
                         String tableSchema = getTableSchema(tableSource);
@@ -777,7 +792,7 @@ public class ASTDruidConditionUtil {
                 }
             }
 
-            private SQLExprTableSource getTableSource(String alias) {
+            private SQLExprTableSource getTableSourceByAlias(String alias) {
                 SQLExprTableSource tableSource = alias != null ? tableAliasMap.get(alias) : null;
                 if (tableSource == null && tableAliasMap.size() == 1) {
                     tableSource = tableAliasMap.values().iterator().next();
@@ -842,6 +857,19 @@ public class ASTDruidConditionUtil {
             }
 
             @Override
+            public boolean visit(SQLUpdateSetItem x) {
+                this.updateTableName = getUpdateTableName(x.getColumn());
+                this.updateSetItem = true;
+                return true;
+            }
+
+            @Override
+            public void endVisit(SQLUpdateSetItem x) {
+                this.updateTableName = null;
+                this.updateSetItem = false;
+            }
+
+            @Override
             public void endVisit(SQLUpdateStatement statement) {
                 try {
                     LinkedList<SQLTableSource> temp = new LinkedList<>();
@@ -883,6 +911,17 @@ public class ASTDruidConditionUtil {
                 } finally {
                     update = false;
                 }
+            }
+
+            private String getUpdateTableName(SQLExpr column) {
+                String alias;
+                if (column instanceof SQLPropertyExpr) {
+                    alias = getAlias((SQLPropertyExpr) column);
+                } else {
+                    alias = null;
+                }
+                SQLExprTableSource tableSource = getTableSourceByAlias(alias);
+                return getTableName(tableSource);
             }
         });
         return change[0];

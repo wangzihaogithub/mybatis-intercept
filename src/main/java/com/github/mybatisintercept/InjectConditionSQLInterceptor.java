@@ -390,6 +390,58 @@ public class InjectConditionSQLInterceptor implements Interceptor {
             return conditionExpression == null ? -1 : interceptor.getConditionExpressionList().indexOf(conditionExpression);
         }
 
+        public boolean isContainsConditionExpressionIndexId(int[] indexIdList) {
+            if (indexIdList == null || indexIdList.length == 0) {
+                return false;
+            }
+            List<SQL> conditionExpressionList = this.conditionExpressionList;
+            Set<Integer> list = new HashSet<>(conditionExpressionList.size());
+            for (SQL sql : conditionExpressionList) {
+                list.add(getConditionExpressionIndexId(sql));
+            }
+            for (int indexId : indexIdList) {
+                if (!list.contains(indexId)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public boolean isConditionExpressionIndexId(int[] indexIdList) {
+            if (indexIdList == null || indexIdList.length == 0) {
+                return false;
+            }
+            List<SQL> conditionExpressionList = this.conditionExpressionList;
+            if (conditionExpressionList == null) {
+                return false;
+            }
+            int size = conditionExpressionList.size();
+            if (indexIdList.length != size) {
+                return false;
+            }
+            for (int i = 0; i < size; i++) {
+                int currIndexId = getConditionExpressionIndexId(conditionExpressionList.get(i));
+                int reqIndexId = indexIdList[i];
+                if (currIndexId != reqIndexId) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public int[] getConditionExpressionIndexIdArray(List<SQL> conditionExpressionList) {
+            int size = conditionExpressionList.size();
+            int[] list = new int[size];
+            for (int i = 0; i < size; i++) {
+                list[i] = getConditionExpressionIndexId(conditionExpressionList.get(i));
+            }
+            return list;
+        }
+
+        public int[] getConditionExpressionIndexIdArray() {
+            return getConditionExpressionIndexIdArray(conditionExpressionList);
+        }
+
         public List<SQL> getConditionExpressionList() {
             return conditionExpressionList;
         }

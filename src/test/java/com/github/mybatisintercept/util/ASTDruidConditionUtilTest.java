@@ -3,6 +3,8 @@ package com.github.mybatisintercept.util;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.List;
+
 public class ASTDruidConditionUtilTest {
 
     public static void main(String[] args) {
@@ -63,6 +65,23 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+        String inj = "t1.tenant_id = 1 \n" +
+                "\t\tOR t1.id IN ( SELECT rec_user_id FROM pipeline WHERE id = 49654 UNION SELECT main_pm_id FROM biz_position WHERE id = ( SELECT biz_position_id FROM pipeline WHERE id = 49654 AND delete_flag = FALSE ) )";
+        String injectCondiwsstdffiwonNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend("         UPDATE pipeline t\n" +
+                        "        SET t.feed_back_type =\n" +
+                        "                (SELECT feedback_type\n" +
+                        "        FROM `pipeline_offer` t1 where t1.`pipeline_id` = t.id\n" +
+                        "        AND t1.delete_flag = 0\n" +
+                        "        ORDER BY t1.create_time DESC limit 1)\n" +
+                        "        where t.id = ?",
+                inj);
+        Assert.assertEquals("         UPDATE pipeline t\n" +
+                "        SET t.feed_back_type =\n" +
+                "                (SELECT feedback_type\n" +
+                "        FROM `pipeline_offer` t1 where t1.`pipeline_id` = t.id\n" +
+                "        AND t1.delete_flag = 0\n" +
+                "        ORDER BY t1.create_time DESC limit 1)\n" +
+                "        where t.id = ?" ,injectCondiwsstdffiwonNdfq2);
 
         String injectCondiwsstdffionNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend(" select distinct t.id from\n" +
                         "        biz_task t\n" +
