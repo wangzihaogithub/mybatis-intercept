@@ -2,6 +2,7 @@ package com.github.mybatisintercept;
 
 import com.github.mybatisintercept.util.MybatisUtil;
 import com.github.mybatisintercept.util.StaticMethodAccessor;
+import com.github.mybatisintercept.util.TypeUtil;
 import org.apache.ibatis.plugin.Interceptor;
 import org.apache.ibatis.plugin.Invocation;
 
@@ -45,6 +46,10 @@ public interface InterceptContext<INTERCEPTOR extends Interceptor> {
     }
 
     Object getAttributeValue(String name);
+
+    default <T> T getAttributeValue(String name, Class<T> type) {
+        return TypeUtil.cast(getAttributeValue(name), type);
+    }
 
     StaticMethodAccessor<InterceptContext<INTERCEPTOR>> getValueProvider();
 
