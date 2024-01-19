@@ -53,6 +53,9 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
         for (ColumnMapping columnMapping : columnMappings) {
             String columnName = columnMapping.getColumnName();
             Object columnValue = valueProvider.invokeWithOnBindContext(columnMapping.getAttrName(), interceptContext);
+            if (columnValue == null) {
+                continue;
+            }
 
             // 找sql里的参数化预编译问号下标
             int columnParameterizedIndex = ASTDruidUtil.getColumnParameterizedIndex(newSql, columnName, dbType);
@@ -65,7 +68,6 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
                 // 3. 用户主动填写了column字段, values是参数化. 就给对象赋值，对应：insert into x_table (`a`, `b`) values (?, ?)
                 BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
                 String property = MybatisUtil.getParameterMappingProperty(boundSql, columnParameterizedIndex);
-
                 // 向实体类里自动回填属性值
                 boolean setterSuccess = MybatisUtil.invokeParameterObjectSetter(boundSql, property, columnValue);
                 if (!setterSuccess) {
@@ -82,18 +84,7 @@ public class InjectColumnValuesInsertSQLInterceptor implements Interceptor {
 
     protected boolean isSupportIntercept(InterceptContext interceptContext) {
         return MybatisUtil.isInterceptPackage(interceptContext.invocation, interceptPackageNames)
-                && existColumnValue(interceptContext)
                 && ASTDruidUtil.isNoSkipInsertOrReplace(MybatisUtil.getBoundSqlString(interceptContext.invocation), dbType, skipPredicate);
-    }
-
-    protected boolean existColumnValue(InterceptContext interceptContext) {
-        for (ColumnMapping item : columnMappings) {
-            Object value = valueProvider.invokeWithOnBindContext(item.getAttrName(), interceptContext);
-            if (value == null) {
-                return false;
-            }
-        }
-        return true;
     }
 
     @Override

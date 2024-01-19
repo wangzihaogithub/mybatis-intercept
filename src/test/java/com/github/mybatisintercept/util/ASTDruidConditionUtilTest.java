@@ -65,6 +65,50 @@ public class ASTDruidConditionUtilTest {
 
     @Test
     public void select() {
+        String injectCondiwsstdffiwonsNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend("(\n" +
+                        "            SELECT 1\n" +
+                        "            from base_corp_project_invoice\n" +
+                        "            WHERE invoice_title in (\n" +
+                        "                                    #{payer},\n" +
+                        "                                    REPLACE(REPLACE(#{payer}, '(', '（'), '）', ')'),\n" +
+                        "                                    REPLACE(REPLACE(#{payer}, '（', '('), ')', '）')\n" +
+                        "                )\n" +
+                        "            limit 1\n" +
+                        "        )\n" +
+                        "        UNION\n" +
+                        "        (\n" +
+                        "            SELECT 1\n" +
+                        "            from biz_corp\n" +
+                        "            WHERE is_delete = false\n" +
+                        "              and (\n" +
+                        "                        brand in (\n" +
+                        "                                  #{payer},\n" +
+                        "                                  REPLACE(REPLACE(#{payer}, '(', '（'), '）', ')'),\n" +
+                        "                                  REPLACE(REPLACE(#{payer}, '（', '('), ')', '）')\n" +
+                        "                        ) or\n" +
+                        "                        `name` in (\n" +
+                        "                                   #{payer},\n" +
+                        "                                   REPLACE(REPLACE(#{payer}, '(', '（'), '）', ')'),\n" +
+                        "                                   REPLACE(REPLACE(#{payer}, '（', '('), ')', '）')\n" +
+                        "                            )\n" +
+                        "                )\n" +
+                        "            limit 1\n" +
+                        "        )",
+                "id = 1");
+        Assert.assertEquals("(SELECT 1\n" +
+                "FROM base_corp_project_invoice\n" +
+                "WHERE invoice_title IN (#{payer}, REPLACE(REPLACE(#{payer}, '(', '（'), '）', ')'), REPLACE(REPLACE(#{payer}, '（', '('), ')', '）'))\n" +
+                "\tAND base_corp_project_invoice.id = 1\n" +
+                "LIMIT 1)\n" +
+                "UNION\n" +
+                "(SELECT 1\n" +
+                "FROM biz_corp\n" +
+                "WHERE is_delete = false\n" +
+                "\tAND (brand IN (#{payer}, REPLACE(REPLACE(#{payer}, '(', '（'), '）', ')'), REPLACE(REPLACE(#{payer}, '（', '('), ')', '）'))\n" +
+                "\t\tOR `name` IN (#{payer}, REPLACE(REPLACE(#{payer}, '(', '（'), '）', ')'), REPLACE(REPLACE(#{payer}, '（', '('), ')', '）')))\n" +
+                "\tAND biz_corp.id = 1\n" +
+                "LIMIT 1)" ,injectCondiwsstdffiwonsNdfq2);
+
         String inj = "t1.tenant_id = 1 \n" +
                 "\t\tOR t1.id IN ( SELECT rec_user_id FROM pipeline WHERE id = 49654 UNION SELECT main_pm_id FROM biz_position WHERE id = ( SELECT biz_position_id FROM pipeline WHERE id = 49654 AND delete_flag = FALSE ) )";
         String injectCondiwsstdffiwonNdfq2 = ASTDruidTestUtil.addAndConditionAlwaysAppend("         UPDATE pipeline t\n" +

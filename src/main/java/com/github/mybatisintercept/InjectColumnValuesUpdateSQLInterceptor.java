@@ -48,24 +48,16 @@ public class InjectColumnValuesUpdateSQLInterceptor implements Interceptor {
         BoundSql boundSql = MybatisUtil.getBoundSql(interceptContext.invocation);
         for (ColumnMapping columnMapping : columnMappings) {
             Object columnValue = valueProvider.invokeWithOnBindContext(columnMapping.getValueProviderGetterPropertyName(), interceptContext);
+            if (columnValue == null) {
+                continue;
+            }
             MybatisUtil.invokeParameterObjectSetter(boundSql, columnMapping.getPersistentObjectSetterPropertyName(), columnValue);
         }
     }
 
     protected boolean isSupportIntercept(InterceptContext interceptContext) {
         return MybatisUtil.isInterceptPackage(interceptContext.invocation, interceptPackageNames)
-                && existColumnValue(interceptContext)
                 && ASTDruidUtil.isNoSkipUpdate(MybatisUtil.getBoundSqlString(interceptContext.invocation), dbType, skipPredicate);
-    }
-
-    protected boolean existColumnValue(InterceptContext interceptContext) {
-        for (ColumnMapping item : columnMappings) {
-            Object value = valueProvider.invokeWithOnBindContext(item.getValueProviderGetterPropertyName(), interceptContext);
-            if (value == null) {
-                return false;
-            }
-        }
-        return true;
     }
 
     @Override

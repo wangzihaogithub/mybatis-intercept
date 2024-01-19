@@ -103,6 +103,9 @@ public class MybatisUtil {
         String id = ms.getId();
         return MAPPED_STATEMENT_METHOD_LRU_MAP.computeIfAbsent(id, o -> {
             Class<?> mapperClass = getMapperClass(ms);
+            if (mapperClass == null) {
+                return null;
+            }
             String mapperMethodName = substringAfterLast(id);
             for (Method method : mapperClass.getMethods()) {
                 // fix https://github.com/mybatis/mybatis-3/issues/237
@@ -180,9 +183,11 @@ public class MybatisUtil {
             }
         } else {
             // Bean
-            BeanMap beanMap = new BeanMap(parameter);
-            beanMap.set(name, value);
-            setParameter(invocation, beanMap);
+            if (!BeanMap.invokeSetter(parameter, name, value)) {
+                BeanMap beanMap = new BeanMap(parameter);
+                beanMap.set(name, value);
+                setParameter(invocation, beanMap);
+            }
         }
 
         BoundSql boundSql = getBoundSql(invocation);
@@ -213,10 +218,8 @@ public class MybatisUtil {
                     return propertyName.substring(0, i);
                 }
             }
-            return propertyName;
-        } else {
-            return propertyName;
         }
+        return propertyName;
     }
 
     public static boolean isEqualsProperty(ParameterMapping parameterMapping, String property) {
@@ -235,12 +238,14 @@ public class MybatisUtil {
                 removeList.add(parameterMapping);
             }
         }
-        boundSql.getParameterMappings().removeAll(removeList);
+        if (!removeList.isEmpty()) {
+            boundSql.getParameterMappings().removeAll(removeList);
+        }
         return removeList;
     }
 
     public static boolean invokeParameterObjectSetter(BoundSql boundSql, String property, Object value) {
-        boolean setterSuccess = true;
+        int setterCount = 0;
         for (ParameterMapping parameterMapping : boundSql.getParameterMappings()) {
             if (!MybatisUtil.isEqualsProperty(parameterMapping, property)) {
                 continue;
@@ -250,51 +255,41 @@ public class MybatisUtil {
             if (parameterObject == null || isBasicType(parameterObject)) {
                 parameterObject = boundSql.getParameterObject();
             }
+            if (parameterObject == null) {
+                continue;
+            }
             Class<?> javaType = parameterMapping.getJavaType();
             if (javaType != null) {
                 value = TypeUtil.cast(value, javaType);
             }
             boolean setPropertyValueSuccess = setPropertyValue(parameterObject, property, value);
-            if (!setPropertyValueSuccess) {
-                setterSuccess = false;
+            if (setPropertyValueSuccess) {
+                setterCount++;
+            } else {
+                return false;
             }
         }
-        return setterSuccess;
+        return setterCount > 0;
     }
 
     public static boolean setPropertyValue(Object parameterObject, String property, Object value) {
-        Map beanHandler;
         Object existValue;
-        if (parameterObject == null) {
-            return true;
-        } else if (parameterObject instanceof Map) {
-            beanHandler = (Map) parameterObject;
-            if (beanHandler.containsKey(property)) {
-                existValue = beanHandler.get(property);
-            } else {
-                existValue = null;
-            }
+        if (parameterObject instanceof Map) {
+            existValue = ((Map) parameterObject).containsKey(property) ? ((Map) parameterObject).get(property) : null;
+        } else if (BeanMap.existProperty(parameterObject, property)) {
+            existValue = BeanMap.invokeGetter(parameterObject, property);
         } else {
-            beanHandler = new BeanMap(parameterObject);
             // 用户实体类里没有这个属性
-            if (!beanHandler.containsKey(property)) {
-                return false;
-            }
-            existValue = beanHandler.get(property);
+            return false;
         }
 
         if (existValue != null && !"".equals(existValue)) {
             // 用户自己赋值了, 不更改用户填的值
             return true;
         } else {
-            // 用户没有赋值，自动回填至实体类
             try {
-                if (beanHandler instanceof BeanMap) {
-                    return ((BeanMap) beanHandler).set(property, value);
-                } else {
-                    beanHandler.put(property, value);
-                    return true;
-                }
+                // 用户没有赋值，自动回填至实体类
+                return BeanMap.invokeSetter(parameterObject, property, value);
             } catch (UnsupportedOperationException | IllegalStateException e) {
                 // 不可变Map
                 return false;
