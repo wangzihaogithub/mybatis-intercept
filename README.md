@@ -25,7 +25,7 @@ Mybatis拦截器 （可以用于租户隔离）
         <dependency>
             <groupId>com.github.wangzihaogithub</groupId>
             <artifactId>mybatis-intercept</artifactId>
-            <version>1.0.13</version>
+            <version>1.0.14</version>
         </dependency>
         
 2.  配置 mybatis-config.xml
@@ -38,35 +38,87 @@ Mybatis拦截器 （可以用于租户隔离）
                 PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
                 "http://mybatis.org/dtd/mybatis-3-config.dtd">
         <configuration>
-            <plugins>
+             <plugins>
                 <!-- 最后执行 -->
                 <plugin interceptor="com.ig.util.IGForceMasterJadeSQLInterceptor"/>
         
                 <plugin interceptor="com.github.pagehelper.PageInterceptor">
                     <property name="helperDialect" value="mysql"/>
-                    <property name="reasonable" value="false"/>
-                    <property name="supportMethodsArguments" value="false"/>
                     <property name="params" value="count=countSql"/>
                 </plugin>
         
                 <plugin interceptor="com.github.mybatisintercept.InjectColumnValuesInsertSQLInterceptor">
-                    <property name="InjectColumnValuesInsertSQLInterceptor.skipTableNames" value="base_holidays,base_subway,base_area,offset,task,hibernate_sequence,help_topic,mapping,sequence_table"/>
-                    <property name="InjectColumnValuesInsertSQLInterceptor.valueProvider" value="com.github.securityfilter.util.AccessUserUtil#getAccessUserValue"/>
+                    <property name="InjectColumnValuesInsertSQLInterceptor.skipTableNames" value="biz_remark_content,tenant_position_share,biz_position_open_tenant"/>
+                    <property name="InjectColumnValuesInsertSQLInterceptor.valueProvider" value="com.ig.service.framework.AccessUser#getInsertAccessValue"/>
                     <property name="InjectColumnValuesInsertSQLInterceptor.columnMappings" value="tenant_id=tenantId"/>
                 </plugin>
         
                 <plugin interceptor="com.github.mybatisintercept.InjectColumnValuesUpdateSQLInterceptor">
-                    <property name="InjectColumnValuesUpdateSQLInterceptor.skipTableNames" value="base_holidays,base_subway,base_area,offset,task,hibernate_sequence,help_topic,mapping,sequence_table"/>
+                    <property name="InjectColumnValuesUpdateSQLInterceptor.skipTableNames" value="${ig.mybatisintercept.skip-table-names}"/>
                     <property name="InjectColumnValuesUpdateSQLInterceptor.valueProvider" value="com.github.securityfilter.util.AccessUserUtil#getAccessUserValue"/>
                     <property name="InjectColumnValuesUpdateSQLInterceptor.columnMappings" value="tenantId"/>
                 </plugin>
         
                 <!-- 最先执行 -->
                 <plugin interceptor="com.github.mybatisintercept.InjectConditionSQLInterceptor">
-                    <property name="InjectConditionSQLInterceptor.skipTableNames" value="base_holidays,base_subway,base_area,offset,task,hibernate_sequence,help_topic,mapping,sequence_table"/>
+                    <property name="InjectConditionSQLInterceptor.skipTableNames" value="${ig.mybatisintercept.skip-table-names}"/>
                     <property name="InjectConditionSQLInterceptor.valueProvider" value="com.github.securityfilter.util.AccessUserUtil#getAccessUserValue"/>
-                    <property name="InjectConditionSQLInterceptor.conditionExpression" value="tenant_id = ${tenantId}"/>
+                    <property name="InjectConditionSQLInterceptor.conditionExpression" value="
+                    tenant_id = ${tenantId};
+        
+                    tenant_id in (
+                        SELECT share_tenant_id from biz_position_open_tenant WHERE position_tenant_id = ${tenantId} and delete_flag = false and biz_position_id = ${unionPositionId}
+                        UNION
+                        SELECT position_tenant_id from biz_position_open_tenant WHERE share_tenant_id = ${tenantId} and delete_flag = false and biz_position_id = ${unionPositionId}
+                        UNION
+                        select ${tenantId}
+                    );
+        
+                    tenant_id in (
+                        select source_tenant_id from pipeline_talent_corresponding_relation where pipeline_id = ${unionPipelineId} and target_tenant_id = ${tenantId}
+                        UNION
+                        select target_tenant_id from pipeline_talent_corresponding_relation where pipeline_id = ${unionPipelineId} and source_tenant_id = ${tenantId}
+                        UNION
+                        select ${tenantId}
+                    );
+        
+                    tenant_id in (
+                        select source_tenant_id from pipeline_talent_corresponding_relation where join_id = ${unionJoinId} and target_tenant_id = ${tenantId}
+                        UNION
+                        select target_tenant_id from pipeline_talent_corresponding_relation where join_id = ${unionJoinId} and source_tenant_id = ${tenantId}
+                        UNION
+                        select ${tenantId}
+                    );
+        
+                    tenant_id = ${tenantId} or id in (
+                        SELECT pm_uid from biz_position_pm WHERE position_id = ${unionPositionId} and delete_flag = false
+                    );
+        
+                    tenant_id = ${tenantId} or id in (
+                        SELECT rec_user_id from pipeline WHERE id = ${unionPipelineId}
+                        UNION
+                        SELECT pm_uid from biz_position_pm WHERE position_id = (SELECT biz_position_id from pipeline WHERE id = ${unionPipelineId} AND delete_flag = false) and delete_flag = false
+                        UNION
+                        SELECT create_uid from pipeline_operate_log WHERE pipeline_id = ${unionPipelineId}
+                        UNION
+                        SELECT owner_id from talent WHERE id in (select talent_id from pipeline WHERE id =${unionPipelineId})
+                        UNION
+                        SELECT bd_uid from biz_corp WHERE id in (select biz_corp_id from pipeline WHERE id =${unionPipelineId})
+                    );
+        
+                    tenant_id = ${tenantId} or id in (
+                        SELECT consultant_id from talent_position_join WHERE id = ${unionJoinId}
+                        UNION
+                        SELECT pm_uid from biz_position_pm WHERE position_id = (SELECT biz_position_id from talent_position_join WHERE id = ${unionJoinId} AND delete_flag = false) and delete_flag = false
+                    );
+                    "/>
                     <property name="InjectConditionSQLInterceptor.existInjectConditionStrategyEnum" value="RULE_TABLE_MATCH_THEN_SKIP_SQL"/>
+                </plugin>
+
+                <plugin interceptor="com.github.mybatisintercept.InjectMapperParametersInterceptor">
+                    <property name="InjectMapperParametersInterceptor.attrNames" value="id,tenantId,com.ig.service.framework.AccessUser"/>
+                    <property name="InjectMapperParametersInterceptor.valueProvider" value="com.github.securityfilter.util.AccessUserUtil#getAccessUserValue"/>
+                    <property name="InjectMapperParametersInterceptor.metaName" value="_meta"/>
                 </plugin>
             </plugins>
         </configuration>
