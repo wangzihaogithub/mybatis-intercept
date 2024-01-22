@@ -518,7 +518,7 @@ public class BeanMap extends LinkedHashMap<String, Object> {
                 }
             } catch (Exception ignored) {
             }
-            return false;
+            return null;
         }
     }
 
