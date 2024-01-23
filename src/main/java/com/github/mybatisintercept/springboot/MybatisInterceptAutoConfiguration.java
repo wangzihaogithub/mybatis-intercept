@@ -14,6 +14,7 @@ import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 @AutoConfigureOrder(Integer.MAX_VALUE - 8)
 @Configuration
@@ -21,14 +22,11 @@ public class MybatisInterceptAutoConfiguration {
 
     @Bean
     public CommandLineRunner mybatisInterceptCommandLineRunner() {
-        class MybatisInterceptAutoConfigurationThread extends Thread {
+        class MybatisInterceptAutoConfigurationRunnable implements Runnable {
             private final ListableBeanFactory beanFactory;
 
-            public MybatisInterceptAutoConfigurationThread(ListableBeanFactory beanFactory) {
+            public MybatisInterceptAutoConfigurationRunnable(ListableBeanFactory beanFactory) {
                 this.beanFactory = beanFactory;
-                setName("MybatisInterceptAutoConfigurationThread");
-                setDaemon(true);
-                setPriority(Thread.MIN_PRIORITY);
             }
 
             private <T> T getBean(Class<T> type) {
@@ -67,7 +65,7 @@ public class MybatisInterceptAutoConfiguration {
                 try {
                     dataSourceList = getDataSourceList();
                 } catch (Exception e) {
-                    if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationThread.class, "getDataSource error = {}", e.toString(), e)) {
+                    if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationRunnable.class, "getDataSource error = {}", e.toString(), e)) {
                         e.printStackTrace();
                     }
                     return;
@@ -76,7 +74,7 @@ public class MybatisInterceptAutoConfiguration {
                 try {
                     PlatformDependentUtil.onSpringDatasourceReady(dataSourceList);
                 } catch (Exception e) {
-                    if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationThread.class, "onSpringDatasourceReady error = {}", e.toString(), e)) {
+                    if (!PlatformDependentUtil.logError(MybatisInterceptAutoConfigurationRunnable.class, "onSpringDatasourceReady error = {}", e.toString(), e)) {
                         e.printStackTrace();
                     }
                 }
@@ -89,7 +87,23 @@ public class MybatisInterceptAutoConfiguration {
 
             @Override
             public void run(String... args) {
-                new MybatisInterceptAutoConfigurationThread(beanFactory).start();
+                Properties properties = MybatisInterceptEnvironmentPostProcessor.resolveSpringPlaceholders(System.getProperties(), "MybatisInterceptAutoConfiguration.");
+                boolean block = "true".equalsIgnoreCase(properties.getProperty("MybatisInterceptAutoConfiguration.block", "true"));
+
+                Runnable runnable = new MybatisInterceptAutoConfigurationRunnable(beanFactory);
+                if (block) {
+                    runnable.run();
+                } else {
+                    class MybatisInterceptAutoConfigurationThread extends Thread {
+                        MybatisInterceptAutoConfigurationThread(Runnable runnable) {
+                            super(runnable);
+                            setName("MybatisInterceptAutoConfigurationThread");
+                            setDaemon(true);
+                            setPriority(Thread.MIN_PRIORITY);
+                        }
+                    }
+                    new MybatisInterceptAutoConfigurationThread(runnable).start();
+                }
             }
         };
     }
