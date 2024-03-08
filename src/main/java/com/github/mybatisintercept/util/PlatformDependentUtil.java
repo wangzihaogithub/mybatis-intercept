@@ -11,15 +11,15 @@ import java.util.Properties;
 import java.util.function.Consumer;
 
 public class PlatformDependentUtil {
-    public static boolean SPRING_ENVIRONMENT_READY;
     public static final boolean EXIST_SPRING_BOOT;
-    private static Collection<DataSource> SPRING_DATASOURCE_READY;
-    private static InjectConditionSQLInterceptor.CompileConditionInjectSelector COMPILE_INJECTOR_SELECTOR;
     private static final ArrayList<Consumer<InjectConditionSQLInterceptor.CompileConditionInjectSelector>> onCompileInjectorSelectorReadyList = new ArrayList<>();
     private static final ArrayList<Runnable> onSpringEnvironmentReadyList = new ArrayList<>();
     private static final ArrayList<Consumer<Collection<DataSource>>> onSpringDatasourceReadyList = new ArrayList<>();
     private static final Method METHOD_GET_LOGGER;
     private static final Method METHOD_LOGGER_ERROR;
+    public static boolean SPRING_ENVIRONMENT_READY;
+    private static Collection<DataSource> SPRING_DATASOURCE_READY;
+    private static InjectConditionSQLInterceptor.CompileConditionInjectSelector COMPILE_INJECTOR_SELECTOR;
 
     static {
         boolean existSpringBoot;
@@ -92,6 +92,9 @@ public class PlatformDependentUtil {
     }
 
     public static void onSpringDatasourceReady(Collection<DataSource> dataSources) {
+        if (dataSources == null || dataSources.isEmpty()) {
+            return;
+        }
         ArrayList<Consumer<Collection<DataSource>>> consumers = new ArrayList<>(onSpringDatasourceReadyList);
         onSpringDatasourceReadyList.clear();
         onSpringDatasourceReadyList.trimToSize();

@@ -2,6 +2,6 @@
 org.springframework.boot.env.EnvironmentPostProcessor=\
 com.github.mybatisintercept.springboot.MybatisInterceptEnvironmentPostProcessor
 
-# Auto Configure
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-com.github.mybatisintercept.springboot.MybatisInterceptAutoConfiguration
+# Application Context Initializers
+org.springframework.context.ApplicationContextInitializer=\
+com.github.mybatisintercept.springboot.MybatisInterceptApplicationContextInitializer
