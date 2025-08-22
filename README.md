@@ -18,7 +18,7 @@ Mybatis拦截器 （可以用于租户隔离）
 
 #### 安装教程
 
-1.  添加maven依赖, 在pom.xml中加入 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.wangzihaogithub/mybatis-intercept/badge.svg)](https://search.maven.org/search?q=g:com.github.wangzihaogithub%20AND%20a:mybatis-intercept)
+1.  添加maven依赖, 在pom.xml中加入 [![Maven Central](https://img.shields.io/maven-central/v/com.github.wangzihaogithub/mybatis-intercept.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:com.github.wangzihaogithub%20AND%20a:mybatis-intercept)
 
 
         <!-- https://mvnrepository.com/artifact/com.github.wangzihaogithub/mybatis-intercept -->
